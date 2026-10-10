@@ -1,7 +1,7 @@
 (function () {
   const A = window.App;
   const { CFG, sb, $, h, money, digits, first, when, timeOf, dayKey, friendly } = A;
-  const S = { user: null, tab: 'proximos', slots: [], bookings: [], services: [], msg: null, askCancel: null };
+  const S = { content: {}, saving: false, user: null, tab: 'proximos', slots: [], bookings: [], services: [], msg: null, askCancel: null };
 
   const STATUS = { free: 'livre', held: 'pendente', booked: 'confirmado', blocked: 'bloqueado' };
   const BLABEL = { pending: 'aguardando Pix', confirmed: 'confirmado' };
@@ -20,6 +20,8 @@
       sb.from('services').select('*').order('sort')
     ]);
     S.slots = sl.data || []; S.services = sv.data || [];
+    const ct = await sb.from('site_content').select('data').eq('id', 1).single();
+    S.content = (ct.data && ct.data.data) || {};
     S.bookings = (bk.data || []).map((b) => Object.assign(b, { starts_at: b.slots.starts_at })).sort((a, b) => a.starts_at < b.starts_at ? -1 : 1);
     render();
   }
@@ -53,9 +55,9 @@
     const hs = 24;
     const head = [h('div', { class: 'mh' }, h('h2', {}, 'Agenda'), h('button', { type: 'button', class: 'linkbtn', onclick: async () => { await sb.auth.signOut(); renderLogin(); } }, 'Sair')),
       h('p', { class: 'hint' }, 'Conectada como ' + S.user.email + '.'),
-      h('div', { class: 'tabs', role: 'tablist' }, tabBtn('proximos', 'Próximos atendimentos', S.bookings.length), tabBtn('agenda', 'Horários'), tabBtn('servicos', 'Serviços'))];
+      h('div', { class: 'tabs', role: 'tablist' }, tabBtn('proximos', 'Próximos atendimentos', S.bookings.length), tabBtn('agenda', 'Horários'), tabBtn('servicos', 'Serviços'), tabBtn('site', 'Site e fotos'))];
     if (S.msg) head.push(h('div', { class: 'notice' + (S.msg.k === 'info' ? ' info' : '') }, S.msg.t));
-    const body = S.tab === 'proximos' ? tabProximos() : S.tab === 'agenda' ? tabAgenda() : tabServicos();
+    const body = S.tab === 'proximos' ? tabProximos() : S.tab === 'agenda' ? tabAgenda() : S.tab === 'servicos' ? tabServicos() : tabSite();
     $('box').replaceChildren(h('div', { class: 'panel' }, head, body));
   }
 
@@ -122,6 +124,96 @@
         act('Adicionar', () => { if (nn.value.trim().length < 2 || np.value === '') return; run(sb.from('services').insert({ id: slug(nn.value), name: nn.value.trim(), price: Number(np.value), kind: nk.value, sort: S.services.length }), 'Serviço adicionado.'); }, '')));
   }
 
+
+  /* ---------- aba Site e fotos ---------- */
+  const FOTOS = [
+    ['logo', 'Logo (fundo transparente, PNG)'], ['about', 'Foto "Sobre mim"'], ['studio', 'Foto do studio'],
+    ['nails1', 'Galeria: unhas'], ['hands', 'Galeria: atendimento'],
+    ['f1', 'Alongamento molde F1'], ['f1antes', 'F1: foto do antes'], ['gel', 'Banho de gel'],
+    ['gelantes', 'Banho de gel: antes'], ['fibra', 'Fibra de vidro']
+  ];
+
+  async function saveContent(patch, okMsg) {
+    const data = Object.assign({}, S.content, patch);
+    const { error } = await sb.from('site_content').update({ data, updated_at: new Date().toISOString() }).eq('id', 1);
+    S.msg = error ? { k: 'warn', t: 'Não foi possível salvar. Tente de novo.' } : { k: 'info', t: okMsg || 'Salvo. Já está no site.' };
+    if (!error) S.content = data;
+    render();
+  }
+
+  // Reduz a foto antes de enviar (celular tira fotos enormes) e mantém PNG para o logo
+  function shrink(file, key) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file), im = new Image();
+      im.onload = () => {
+        const max = key === 'logo' ? 900 : 1600, k = Math.min(1, max / Math.max(im.width, im.height));
+        const c = document.createElement('canvas'); c.width = Math.round(im.width * k); c.height = Math.round(im.height * k);
+        c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+        const png = key === 'logo';
+        c.toBlob((b) => { URL.revokeObjectURL(url); b ? resolve({ blob: b, ext: png ? 'png' : 'jpg', type: png ? 'image/png' : 'image/jpeg' }) : reject(new Error('img')); }, png ? 'image/png' : 'image/jpeg', 0.85);
+      };
+      im.onerror = () => { URL.revokeObjectURL(url); reject(new Error('img')); };
+      im.src = url;
+    });
+  }
+
+  async function sendPhoto(key, file) {
+    try {
+      const { blob, ext, type } = await shrink(file, key);
+      const path = key + '-' + Date.now() + '.' + ext;
+      const up = await sb.storage.from('fotos').upload(path, blob, { contentType: type, upsert: false });
+      if (up.error) throw up.error;
+      const url = sb.storage.from('fotos').getPublicUrl(path).data.publicUrl;
+      await saveContent({ fotos: Object.assign({}, S.content.fotos, { [key]: url }) }, 'Foto trocada. Já está no site.');
+    } catch (e) { S.msg = { k: 'warn', t: 'Não foi possível enviar a foto. Use uma imagem JPG ou PNG.' }; render(); }
+  }
+
+  function tabSite() {
+    const t = Object.assign({}, CFG.textos, S.content.textos || {});
+    const wa = S.content.whatsapp || CFG.whatsapp, ig = S.content.instagram || CFG.instagram;
+    const nail = Array.isArray(S.content.nailArt) ? S.content.nailArt : CFG.nailArt;
+    const field = (label, el) => h('div', { class: 'f' }, h('label', {}, label), el);
+
+    const inWa = h('input', { value: wa, inputmode: 'numeric', placeholder: '5511999999999' });
+    const inIg = h('input', { value: ig, placeholder: 'seu.instagram' });
+    const contatos = h('div', { class: 'card-edit' }, h('h3', {}, 'Contatos'),
+      h('p', { class: 'hint' }, 'WhatsApp com 55 e o DDD, só números. Instagram sem o @.'),
+      h('div', { class: 'svcrow two' }, field('WhatsApp', inWa), field('Instagram', inIg)),
+      act('Salvar contatos', () => saveContent({ whatsapp: digits(inWa.value), instagram: inIg.value.trim().replace(/^@/, '') }), ''));
+
+    const tTitulo = h('textarea', { rows: '2' }, t.titulo), tSub = h('textarea', { rows: '2' }, t.sub);
+    const tSobreT = h('input', { value: t.sobreTitulo });
+    const tFatos = h('textarea', { rows: '3' }, t.sobreFatos.join('\n'));
+    const tSobre = h('textarea', { rows: '6' }, t.sobre.join('\n\n'));
+    const tPag = h('input', { value: t.formasPagamento });
+    const textos = h('div', { class: 'card-edit' }, h('h3', {}, 'Textos do site'),
+      field('Frase principal (topo da página)', tTitulo), field('Frase de apoio', tSub), field('Título do "Sobre mim"', tSobreT),
+      field('Destaques do "Sobre mim" (um por linha)', tFatos), field('Texto do "Sobre mim" (separe parágrafos com uma linha em branco)', tSobre),
+      field('Formas de pagamento (aparece no rodapé)', tPag),
+      act('Salvar textos', () => saveContent({ textos: {
+        titulo: tTitulo.value.trim(), sub: tSub.value.trim(), sobreTitulo: tSobreT.value.trim(),
+        sobreFatos: tFatos.value.split('\n').map((x) => x.trim()).filter(Boolean),
+        sobre: tSobre.value.split(/\n\s*\n/).map((x) => x.trim()).filter(Boolean), formasPagamento: tPag.value.trim() } }), ''));
+
+    const rows = nail.map((r) => [h('input', { value: r[0], 'aria-label': 'Nome' }), h('input', { value: r[1], type: 'number', min: '0', 'aria-label': 'Preço' })]);
+    const nailBox = h('div', { class: 'card-edit' }, h('h3', {}, 'Tabela de nail art'),
+      rows.map(([n, p], i) => h('div', { class: 'svcrow two' }, field('Nome', n), field('Preço (R$)', p),
+        act('Remover', () => saveContent({ nailArt: nail.filter((_, j) => j !== i) }, 'Item removido.'), 'danger'))),
+      h('div', { class: 'btns' },
+        act('Adicionar item', () => saveContent({ nailArt: [...nail, ['Novo item', 0]] }, 'Item adicionado. Edite o nome e o preço e salve.'), ''),
+        act('Salvar tabela', () => saveContent({ nailArt: rows.map(([n, p]) => [n.value.trim(), Number(p.value)]).filter((r) => r[0]) }), '')));
+
+    const fotos = h('div', { class: 'card-edit' }, h('h3', {}, 'Fotos'),
+      h('p', { class: 'hint' }, 'Escolha uma foto do celular ou do computador. Ela é reduzida sozinha e entra no site na hora.'),
+      h('div', { class: 'photos' }, FOTOS.map(([key, label]) => {
+        const file = h('input', { type: 'file', accept: 'image/*', hidden: true, onchange: (e) => { if (e.target.files[0]) sendPhoto(key, e.target.files[0]); } });
+        return h('div', { class: 'photo' }, h('img', { src: A.img(key), alt: label }), h('b', {}, label),
+          act('Trocar foto', () => file.click(), ''), file);
+      })));
+
+    return h('div', { class: 'list' }, contatos, textos, nailBox, fotos);
+  }
+
   async function start() {
     const { data } = await sb.auth.getSession();
     if (!data.session) return renderLogin();
@@ -130,6 +222,5 @@
     if (owner.error || owner.data !== true) { await sb.auth.signOut(); return renderLogin('Este e-mail não tem acesso ao painel.'); }
     await reload();
   }
-  A.applyTheme();
-  start();
+  (async () => { await A.loadContent(); A.applyTheme(); start(); })();
 })();

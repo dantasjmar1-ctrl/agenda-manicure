@@ -31,13 +31,30 @@
   const rules = () => CFG.regras;
   const depositPct = (svc, def) => (svc.deposit_pct == null ? def : Number(svc.deposit_pct));
 
+  // Conteúdo editável pela dona (tabela site_content). Se falhar, o site usa o que está em config/.
+  CFG.fotos = {};
+  async function loadContent() {
+    try {
+      const { data } = await sb.from('site_content').select('data').eq('id', 1).single();
+      const d = (data && data.data) || {};
+      if (d.textos) CFG.textos = Object.assign({}, CFG.textos, d.textos);
+      if (d.whatsapp) CFG.whatsapp = digitsOnly(d.whatsapp);
+      if (d.instagram) CFG.instagram = String(d.instagram).replace(/^@/, '');
+      if (Array.isArray(d.nailArt)) CFG.nailArt = d.nailArt;
+      if (d.fotos) CFG.fotos = d.fotos;
+      return d;
+    } catch (e) { return {}; }
+  }
+  const digitsOnly = (s) => String(s || '').replace(/\D/g, '');
+  const img = (key) => CFG.fotos[key] || ('config/' + key + (key === 'logo' ? '.png' : '.jpg'));
+
   function applyTheme() {
     const c = CFG.cores, r = document.documentElement.style;
     r.setProperty('--bg', c.bg); r.setProperty('--surface', c.surface); r.setProperty('--soft', c.soft);
     r.setProperty('--ink', c.ink); r.setProperty('--muted', c.muted); r.setProperty('--tan', c.tan);
     r.setProperty('--gold', c.gold); r.setProperty('--line', c.line);
     document.title = CFG.nome + ' · ' + CFG.subtitulo;
-    document.querySelectorAll('[data-img]').forEach((i) => { i.src = 'config/' + i.dataset.img + (i.dataset.img === 'logo' ? '.png' : '.jpg'); });
+    document.querySelectorAll('[data-img]').forEach((i) => { i.src = img(i.dataset.img); });
     document.querySelectorAll('[data-nome]').forEach((e) => { e.textContent = CFG.nome; });
     document.querySelectorAll('[data-wa]').forEach((a) => { a.href = 'https://wa.me/' + CFG.whatsapp; });
     document.querySelectorAll('[data-wa-txt]').forEach((a) => { a.textContent = 'WhatsApp ' + waPretty(); });
@@ -72,5 +89,5 @@
   }
 
   window.App = { CFG, sb, $, h, money, digits, first, fmt, dayKey, timeOf, when, rules, depositPct,
-    applyTheme, waPretty, waLink, loadServices, loadSettings, friendly };
+    applyTheme, loadContent, img, waPretty, waLink, loadServices, loadSettings, friendly };
 })();

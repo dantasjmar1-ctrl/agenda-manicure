@@ -28,7 +28,7 @@
     $('cards').replaceChildren(...CFG.catalogo.map((c) => {
       const s = svc(c.id); if (!s) return null;
       const m = maint(c.manutencao);
-      const img = (cls, name, alt) => h('img', { class: cls, 'data-img': name, alt, src: 'config/' + name + '.jpg' });
+      const img = (cls, name, alt) => h('img', { class: cls, 'data-img': name, alt, src: A.img(name) });
       return h('article', { class: 'svc' },
         h('div', { class: 'ph' }, img('main', c.foto, s.name), c.antes ? img('before', c.antes, 'Antes') : null, h('span', { class: 'tag' }, c.etiqueta)),
         h('div', { class: 'bd' }, h('h3', {}, s.name), h('div', { class: 'price' }, money(s.price)), h('p', { class: 'note' }, c.nota),
@@ -224,7 +224,7 @@
   }
 
   async function init() {
-    A.applyTheme(); renderStatic();
+    await A.loadContent(); A.applyTheme(); renderStatic();
     try {
       [S.services, S.settings] = await Promise.all([A.loadServices(), A.loadSettings()]);
       await loadSlots();

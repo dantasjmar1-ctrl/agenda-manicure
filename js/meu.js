@@ -75,7 +75,7 @@
   }
 
   (async function init() {
-    A.applyTheme();
+    await A.loadContent(); A.applyTheme();
     try {
       const [svcs, st] = await Promise.all([sb.from('services').select('id,name'), A.loadSettings()]);
       (svcs.data || []).forEach((s) => { S.names[s.id] = s.name; });
