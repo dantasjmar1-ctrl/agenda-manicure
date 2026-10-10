@@ -61,5 +61,5 @@ window.SITE = {
   supabase: { url: 'https://qpoutnrzzthokiqyozgs.supabase.co', anonKey: 'sb_publishable_YuGh4kEPxX0ZWa4aafq6jA_gu-WNjm7' },
   // 'mercadopago' (automático) ou 'manual' (a dona confere o Pix). Ainda em aberto.
   // 'teste' = botão de teste, sem dinheiro (só para desenvolver). Trocar antes de a Kailane usar.
-  pagamento: { provedor: 'teste', chavePix: '' }
+ pagamento: { provedor: 'mercadopago', chavePix: '' }
 };
