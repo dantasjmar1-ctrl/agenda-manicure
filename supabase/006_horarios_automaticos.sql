@@ -9,9 +9,9 @@ create table if not exists weekly_hours (
 alter table weekly_hours enable row level security;
 drop policy if exists weekly_hours_owner on weekly_hours;
 create policy weekly_hours_owner on weekly_hours for all using (is_owner()) with check (is_owner());
-grant select, insert, delete on weekly_hours to authenticated;
+grant select on weekly_hours to authenticated;
 
--- Rotina combinada (ajustável depois no painel)
+-- Rotina combinada com a Kailane (para mudar um dia, é só avisar o suporte)
 insert into weekly_hours (weekday, at) values
   (2,'09:00'),(2,'11:30'),(2,'14:00'),(2,'16:30'),(2,'18:30'),
   (3,'09:00'),(3,'11:30'),(3,'14:00'),(3,'16:30'),
@@ -47,17 +47,3 @@ begin
    where s.status = 'free' and s.starts_at > now() order by s.starts_at;
 end $$;
 grant execute on function public_slots() to anon;
-
--- Tirar um horário da rotina: some também dos dias futuros que estão livres e sem cliente
-create or replace function remove_weekly_hour(p_weekday int, p_at time) returns void
-language plpgsql security definer as $$
-begin
-  if not is_owner() then raise exception 'forbidden'; end if;
-  delete from weekly_hours where weekday = p_weekday and at = p_at;
-  delete from slots s
-   where s.status = 'free' and s.starts_at > now()
-     and extract(dow from (s.starts_at at time zone 'America/Sao_Paulo'))::int = p_weekday
-     and (s.starts_at at time zone 'America/Sao_Paulo')::time = p_at
-     and not exists (select 1 from bookings b where b.slot_id = s.id);
-end $$;
-grant execute on function remove_weekly_hour(int, time) to authenticated;

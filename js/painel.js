@@ -1,7 +1,7 @@
 (function () {
   const A = window.App;
   const { CFG, sb, $, h, money, digits, first, when, timeOf, dayKey, friendly } = A;
-  const S = { weekly: [], closed: new Set(), content: {}, saving: false, user: null, tab: 'agenda', day: null, month: null, calOpen: false, slots: [], bookings: [], services: [], msg: null, askCancel: null };
+  const S = { closed: new Set(), content: {}, saving: false, user: null, tab: 'agenda', day: null, month: null, calOpen: false, slots: [], bookings: [], services: [], msg: null, askCancel: null };
 
   const STATUS = { free: 'livre', held: 'pendente', booked: 'confirmado', blocked: 'bloqueado' };
   const BLABEL = { pending: 'aguardando Pix', confirmed: 'confirmado' };
@@ -15,14 +15,12 @@
 
   async function reload() {
     await sb.rpc('ensure_slots');
-    const [sl, bk, sv, cd, wk] = await Promise.all([
+    const [sl, bk, sv, cd] = await Promise.all([
       sb.from('slots').select('*').gte('starts_at', new Date(new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }) + 'T00:00:00-03:00').toISOString()).order('starts_at'),
       sb.from('bookings').select('*, slots(starts_at)').in('status', ['pending', 'confirmed']),
       sb.from('services').select('*').order('sort'),
-      sb.from('closed_days').select('day'),
-      sb.from('weekly_hours').select('weekday, at').order('at')
+      sb.from('closed_days').select('day')
     ]);
-    S.weekly = (wk && wk.data) || [];
     S.closed = new Set(((cd && cd.data) || []).map((r) => r.day));
     S.slots = sl.data || []; S.services = sv.data || [];
     const ct = await sb.from('site_content').select('data').eq('id', 1).single();
@@ -60,7 +58,7 @@
     const hs = 24;
     const head = [h('div', { class: 'mh' }, h('h2', {}, 'Agenda'), h('button', { type: 'button', class: 'linkbtn', onclick: async () => { await sb.auth.signOut(); renderLogin(); } }, 'Sair')),
       h('p', { class: 'hint' }, 'Conectada como ' + S.user.email + '.'),
-      h('div', { class: 'tabs', role: 'tablist' }, tabBtn('agenda', 'Agenda', S.bookings.filter((b) => b.status === 'pending').length), tabBtn('rotina', 'Rotina e viagens'), tabBtn('servicos', 'Serviços'), tabBtn('site', 'Site e fotos'))];
+      h('div', { class: 'tabs', role: 'tablist' }, tabBtn('agenda', 'Agenda', S.bookings.filter((b) => b.status === 'pending').length), tabBtn('rotina', 'Viagens e folgas'), tabBtn('servicos', 'Serviços'), tabBtn('site', 'Site e fotos'))];
     if (S.msg) head.push(h('div', { class: 'notice' + (S.msg.k === 'info' ? ' info' : '') }, S.msg.t));
     const body = S.tab === 'agenda' ? tabAgenda() : S.tab === 'rotina' ? tabRotina() : S.tab === 'servicos' ? tabServicos() : tabSite();
     $('box').replaceChildren(h('div', { class: 'panel' }, head, body));
@@ -173,16 +171,6 @@
 
   function tabRotina() {
     const hoje = todayKey();
-    const NAMES = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
-    const gen = h('div', { class: 'box' }, h('h4', {}, 'Horários de atendimento da semana'),
-      h('p', { class: 'hint' }, 'Esses horários se repetem toda semana, sozinhos, e ficam abertos para as clientes pelos próximos 60 dias. Para tirar um horário, toque no x. Para incluir, digite o horário e toque em Incluir.'),
-      [2, 3, 4, 5, 6, 0, 1].map((wd) => {
-        const list = S.weekly.filter((r) => r.weekday === wd).map((r) => String(r.at).slice(0, 5)).sort();
-        const t = h('input', { type: 'time', step: '300', 'aria-label': 'Novo horário de ' + NAMES[wd] });
-        return h('div', { class: 'wk' }, h('b', {}, NAMES[wd]),
-          h('div', { class: 'chips' }, list.length ? list.map((tm) => h('button', { type: 'button', class: 'chip', title: 'Tirar ' + tm, onclick: () => { if (confirm('Tirar ' + tm + ' de toda ' + NAMES[wd].toLowerCase() + '? Os horários livres futuros desse horário somem do site.')) run(sb.rpc('remove_weekly_hour', { p_weekday: wd, p_at: tm }), 'Horário retirado da rotina.'); } }, tm + ' ×')) : h('span', { class: 'hint' }, 'Fechado')),
-          h('div', { class: 'addrow' }, t, act('Incluir', () => { if (!t.value) return; run(sb.from('weekly_hours').insert({ weekday: wd, at: t.value }), 'Horário incluído. Já aparece no site.'); }, '')));
-      }));
     const f1 = h('input', { id: 'clA', type: 'date', min: hoje }), f2 = h('input', { id: 'clB', type: 'date', min: hoje });
     const range = () => ({ a: new Date(f1.value + 'T00:00:00-03:00').toISOString(), b: new Date(f2.value + 'T23:59:59-03:00').toISOString() });
     const close = h('div', { class: 'box' }, h('h4', {}, 'Fechar dias (viagem, folga)'),
@@ -196,7 +184,7 @@
           if (!f1.value || !f2.value || f2.value < f1.value) { S.msg = { k: 'warn', t: 'Escolha o primeiro e o último dia.' }; return render(); }
           return openDays(f1.value, f2.value, 'Período reaberto.');
         }, '')));
-    return h('div', {}, gen, close);
+    return h('div', {}, close);
   }
 
   function tabServicos() {
