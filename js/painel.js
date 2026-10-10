@@ -90,9 +90,47 @@
         if (!d.value || !t.value) return;
         run(sb.from('slots').insert({ starts_at: d.value + 'T' + t.value + ':00-03:00' }), 'Horário liberado.');
       }, ''));
+    const hoje = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+    const wk = h('input', { id: 'genW', type: 'number', min: '1', max: '26', value: '4', inputmode: 'numeric' });
+    const gen = h('div', { class: 'box' }, h('h4', {}, 'Gerar horários da rotina'),
+      h('p', { class: 'hint' }, 'Cria os horários de terça a sábado, do jeito combinado, para as próximas semanas. Horários que já existem não são repetidos.'),
+      h('div', { class: 'addrow' }, h('div', { class: 'f' }, h('label', { for: 'genW' }, 'Quantas semanas'), wk),
+        act('Gerar horários', async () => {
+          const n = Math.max(1, Math.min(26, Number(wk.value) || 4)), rows = [];
+          for (let i = 0; i < n * 7; i++) {
+            const day = new Date(hoje + 'T12:00:00-03:00'); day.setDate(day.getDate() + i);
+            const iso = day.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+            const wd = new Date(iso + 'T12:00:00-03:00').getUTCDay();
+            ((CFG.horarios || {})[wd] || []).forEach((t) => { const at = new Date(iso + 'T' + t + ':00-03:00'); if (at > new Date()) rows.push({ starts_at: at.toISOString() }); });
+          }
+          if (!rows.length) return;
+          const { error } = await sb.from('slots').upsert(rows, { onConflict: 'starts_at', ignoreDuplicates: true });
+          S.msg = error ? { k: 'warn', t: friendly(error) } : { k: 'info', t: 'Horários gerados para ' + n + ' semana(s).' };
+          await reload();
+        }, '')));
+    const f1 = h('input', { id: 'clA', type: 'date', min: hoje }), f2 = h('input', { id: 'clB', type: 'date', min: hoje });
+    const range = () => ({ a: new Date(f1.value + 'T00:00:00-03:00').toISOString(), b: new Date(f2.value + 'T23:59:59-03:00').toISOString() });
+    const close = h('div', { class: 'box' }, h('h4', {}, 'Fechar dias (viagem, folga)'),
+      h('p', { class: 'hint' }, 'Escolha o primeiro e o último dia. Os horários livres desse período ficam bloqueados e somem do site. Atendimentos já marcados não são mexidos: cancele em "Próximos atendimentos".'),
+      h('div', { class: 'addrow' }, h('div', { class: 'f' }, h('label', { for: 'clA' }, 'De'), f1), h('div', { class: 'f' }, h('label', { for: 'clB' }, 'Até'), f2),
+        act('Fechar período', async () => {
+          if (!f1.value || !f2.value || f2.value < f1.value) { S.msg = { k: 'warn', t: 'Escolha o primeiro e o último dia.' }; return render(); }
+          const { a, b } = range();
+          const { error } = await sb.from('slots').update({ status: 'blocked' }).eq('status', 'free').gte('starts_at', a).lte('starts_at', b);
+          const kept = await sb.from('slots').select('id', { count: 'exact', head: true }).in('status', ['booked', 'held']).gte('starts_at', a).lte('starts_at', b);
+          S.msg = error ? { k: 'warn', t: friendly(error) } : { k: kept.count ? 'warn' : 'info', t: 'Período fechado.' + (kept.count ? ' Atenção: ' + kept.count + ' horário(s) já têm cliente e continuam ativos. Cancele em "Próximos atendimentos".' : '') };
+          await reload();
+        }, 'danger'),
+        act('Reabrir período', async () => {
+          if (!f1.value || !f2.value || f2.value < f1.value) { S.msg = { k: 'warn', t: 'Escolha o primeiro e o último dia.' }; return render(); }
+          const { a, b } = range();
+          const { error } = await sb.from('slots').update({ status: 'free' }).eq('status', 'blocked').gte('starts_at', a).lte('starts_at', b);
+          S.msg = error ? { k: 'warn', t: friendly(error) } : { k: 'info', t: 'Período reaberto.' };
+          await reload();
+        }, '')));
     const byDay = {}; S.slots.filter((s) => new Date(s.starts_at) > new Date()).forEach((s) => { (byDay[dayKey(s.starts_at)] = byDay[dayKey(s.starts_at)] || []).push(s); });
     const bySlot = {}; S.bookings.forEach((b) => { bySlot[b.slot_id] = b; });
-    return h('div', {}, add, Object.keys(byDay).sort().map((day) => h('div', { class: 'dayblock' },
+    return h('div', {}, gen, close, add, Object.keys(byDay).sort().map((day) => h('div', { class: 'dayblock' },
       h('h4', {}, new Date(day + 'T12:00:00-03:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', timeZone: 'America/Sao_Paulo' })),
       byDay[day].map((s) => {
         const b = bySlot[s.id], btns = [];

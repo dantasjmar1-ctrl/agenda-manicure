@@ -235,3 +235,5 @@ footer{padding-block:56px 0}
 .photo img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:12px;background:var(--soft)}
 @media (max-width:720px){.svcrow.two{grid-template-columns:1fr 1fr}.svcrow.two .f:first-child{grid-column:1/-1}}
 .photo img[alt^="Logo"]{object-fit:contain;background:#fff}
+.box{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:14px}
+.box>h4{margin:0 0 4px;font-family:var(--display);font-weight:500;font-size:18px}
