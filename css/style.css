@@ -237,3 +237,6 @@ footer{padding-block:56px 0}
 .photo img[alt^="Logo"]{object-fit:contain;background:#fff}
 .box{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:14px}
 .box>h4{margin:0 0 4px;font-family:var(--display);font-weight:500;font-size:18px}
+.f select{border:1px solid var(--line);background:var(--bg);border-radius:12px;padding:12px 14px;width:100%;min-height:46px}
+.svcrow.new{grid-template-columns:minmax(0,2fr) minmax(0,.8fr) minmax(0,1.2fr) auto}
+@media (max-width:720px){.svcrow.new{grid-template-columns:1fr 1fr}.svcrow.new .btn{grid-column:1/-1}}
