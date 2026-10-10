@@ -261,3 +261,6 @@ footer{padding-block:56px 0}
 .cal-d.sel .cd{color:var(--on-gold)}
 .cal-d.closed{background:var(--soft);border-style:dashed}
 #agendar fieldset,#times,#stepnav{scroll-margin-top:84px}
+.plink{user-select:text;-webkit-user-select:text}
+.plink-url{font-weight:600;overflow-wrap:anywhere;color:var(--gold);text-decoration:underline}
+.plink .btn{justify-self:start;margin-top:6px}

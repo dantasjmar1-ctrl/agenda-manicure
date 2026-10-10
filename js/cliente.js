@@ -203,9 +203,11 @@
     b.replaceChildren(h('div', { class: 'done' }, ico,
       h('h3', {}, 'Horário confirmado, ' + first(info.nome) + '!'),
       h('p', {}, when(info.when) + (Number(info.deposit) ? '. Sinal de ' + money(info.deposit) + ' pago' : '') + '. O horário já está na agenda.'),
-      h('div', { class: 'plink' }, h('small', {}, 'Seu link para ver, remarcar ou cancelar'), h('b', {}, link)),
+      h('div', { class: 'plink' }, h('small', {}, 'Seu link para ver, remarcar ou cancelar'), h('a', { href: link, class: 'plink-url' }, link),
+        h('button', { class: 'btn small ghost', type: 'button', onclick: async (ev) => { const ok = await A.copy(link); ev.target.textContent = ok ? 'Link copiado!' : 'Toque no link acima e copie'; } }, 'Copiar link')),
       h('p', { class: 'hint' }, 'Salve este link ou tire um print. Remarcando até ' + hs + ' horas antes, o sinal passa para o novo horário. Cancelando até ' + hs + ' horas antes, o sinal é devolvido por Pix. Com menos de ' + hs + ' horas, o sinal é perdido e você paga outro para remarcar.'),
       h('div', { class: 'actions' }, h('a', { class: 'btn', href: 'meu.html?t=' + info.token }, 'Ver meu agendamento'),
+        h('a', { class: 'btn ghost', href: A.waLink('Oi! Sou ' + first(info.nome) + ' e agendei para ' + when(info.when) + '. Meu link para acompanhar: ' + link), target: '_blank', rel: 'noopener' }, 'Avisar no WhatsApp'),
         h('button', { class: 'btn ghost', type: 'button', onclick: () => location.reload() }, 'Fazer outro agendamento'))));
     b.scrollIntoView({ block: 'center' });
   }

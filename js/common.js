@@ -64,6 +64,15 @@
     const d = CFG.whatsapp.replace(/^55/, '');
     return d.length === 11 ? '(' + d.slice(0, 2) + ') ' + d.slice(2, 7) + '-' + d.slice(7) : d;
   }
+  // Copia um texto (funciona também em navegadores que bloqueiam a área de transferência)
+  async function copy(text) {
+    try { await navigator.clipboard.writeText(text); return true; } catch (e) { /* tenta o jeito antigo */ }
+    try {
+      const t = document.createElement('textarea'); t.value = text; t.setAttribute('readonly', ''); t.style.position = 'fixed'; t.style.opacity = '0';
+      document.body.appendChild(t); t.select(); t.setSelectionRange(0, text.length);
+      const ok = document.execCommand('copy'); t.remove(); return ok;
+    } catch (e) { return false; }
+  }
   const waLink = (msg) => 'https://wa.me/' + CFG.whatsapp + '?text=' + encodeURIComponent(msg);
 
   async function loadServices() {
@@ -81,6 +90,7 @@
   function friendly(err) {
     const m = (err && err.message) || '';
     if (m.includes('slot_unavailable')) return 'Esse horário acabou de ser ocupado. Escolha outro.';
+    if (m.includes('maintenance_not_allowed')) return 'A manutenção é só para quem já fez aplicação com a gente nos últimos dias. Se é a sua primeira vez, escolha uma aplicação, ou "Manutenção de outra profissional" se suas unhas são de outra profissional.';
     if (m.includes('too_late')) return 'Faltam menos de 24 horas, então não dá mais para remarcar sem perder o sinal.';
     if (m.includes('invalid_data')) return 'Confira seu nome e WhatsApp.';
     if (m.includes('not_found')) return 'Agendamento não encontrado ou já finalizado.';
@@ -89,5 +99,5 @@
   }
 
   window.App = { CFG, sb, $, h, money, digits, first, fmt, dayKey, timeOf, when, rules, depositPct,
-    applyTheme, loadContent, img, waPretty, waLink, loadServices, loadSettings, friendly };
+    applyTheme, loadContent, img, waPretty, waLink, copy, loadServices, loadSettings, friendly };
 })();

@@ -55,7 +55,8 @@
       else parts.push(h('div', { class: 'btns' },
         h('button', { class: 'btn', type: 'button', onclick: () => { if (can) location.href = 'index.html?remarcar=' + encodeURIComponent(token); else { S.ask = 'resched'; render(); } } }, can ? 'Remarcar' : 'Remarcar e pagar novo sinal'),
         h('button', { class: 'btn ghost danger', type: 'button', onclick: () => { S.ask = 'cancel'; render(); } }, 'Cancelar horário'),
-        h('a', { class: 'btn ghost', href: waLink('Oi! Sou ' + first(b.client_name) + ' e quero falar sobre meu horário de ' + when(b.starts_at) + '.'), target: '_blank', rel: 'noopener' }, 'Falar no WhatsApp')));
+        h('button', { class: 'btn ghost', type: 'button', onclick: async (ev) => { const ok = await A.copy(location.href); ev.target.textContent = ok ? 'Link copiado!' : 'Copie o endereço do navegador'; } }, 'Copiar meu link'),
+        h('a', { class: 'btn ghost', href: waLink('Oi! Sou ' + first(b.client_name) + ' e quero falar sobre meu horário de ' + when(b.starts_at) + '. Meu link: ' + location.href), target: '_blank', rel: 'noopener' }, 'Falar no WhatsApp')));
     }
     box.replaceChildren(h('div', { class: 'meu' }, parts));
   }
