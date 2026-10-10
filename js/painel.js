@@ -1,7 +1,7 @@
 (function () {
   const A = window.App;
   const { CFG, sb, $, h, money, digits, first, when, timeOf, dayKey, friendly } = A;
-  const S = { content: {}, saving: false, user: null, tab: 'agenda', day: null, month: null, calOpen: false, slots: [], bookings: [], services: [], msg: null, askCancel: null };
+  const S = { weekly: [], closed: new Set(), content: {}, saving: false, user: null, tab: 'agenda', day: null, month: null, calOpen: false, slots: [], bookings: [], services: [], msg: null, askCancel: null };
 
   const STATUS = { free: 'livre', held: 'pendente', booked: 'confirmado', blocked: 'bloqueado' };
   const BLABEL = { pending: 'aguardando Pix', confirmed: 'confirmado' };
@@ -14,11 +14,16 @@
   }
 
   async function reload() {
-    const [sl, bk, sv] = await Promise.all([
+    await sb.rpc('ensure_slots');
+    const [sl, bk, sv, cd, wk] = await Promise.all([
       sb.from('slots').select('*').gte('starts_at', new Date(new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }) + 'T00:00:00-03:00').toISOString()).order('starts_at'),
       sb.from('bookings').select('*, slots(starts_at)').in('status', ['pending', 'confirmed']),
-      sb.from('services').select('*').order('sort')
+      sb.from('services').select('*').order('sort'),
+      sb.from('closed_days').select('day'),
+      sb.from('weekly_hours').select('weekday, at').order('at')
     ]);
+    S.weekly = (wk && wk.data) || [];
+    S.closed = new Set(((cd && cd.data) || []).map((r) => r.day));
     S.slots = sl.data || []; S.services = sv.data || [];
     const ct = await sb.from('site_content').select('data').eq('id', 1).single();
     S.content = (ct.data && ct.data.data) || {};
@@ -67,6 +72,24 @@
   const longDay = (key) => new Date(key + 'T12:00:00-03:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', timeZone: TZ });
   const dayRange = (key) => ({ a: new Date(key + 'T00:00:00-03:00').toISOString(), b: new Date(key + 'T23:59:59-03:00').toISOString() });
 
+  const daysBetween = (a, b) => { const out = []; for (let k = a, n = 0; k <= b && n < 400; k = addDays(k, 1), n++) out.push(k); return out; };
+  async function closeDays(from, to, okMsg) {
+    const days = daysBetween(from, to), a = dayRange(from).a, z = dayRange(to).b;
+    const ins = await sb.from('closed_days').upsert(days.map((day) => ({ day })), { onConflict: 'day', ignoreDuplicates: true });
+    if (ins.error) { S.msg = { k: 'warn', t: friendly(ins.error) }; return reload(); }
+    const up = await sb.from('slots').update({ status: 'blocked' }).eq('status', 'free').gte('starts_at', a).lte('starts_at', z);
+    const kept = await sb.from('slots').select('id', { count: 'exact', head: true }).in('status', ['booked', 'held']).gte('starts_at', a).lte('starts_at', z);
+    S.msg = up.error ? { k: 'warn', t: friendly(up.error) } : { k: kept.count ? 'warn' : 'info', t: okMsg + (kept.count ? ' Atenção: ' + kept.count + ' horário(s) já têm cliente e continuam ativos. Cancele na aba Agenda.' : '') };
+    await reload();
+  }
+  async function openDays(from, to, okMsg) {
+    const del = await sb.from('closed_days').delete().gte('day', from).lte('day', to);
+    const up = await sb.from('slots').update({ status: 'free' }).eq('status', 'blocked').gte('starts_at', dayRange(from).a).lte('starts_at', dayRange(to).b);
+    const err = del.error || up.error;
+    S.msg = err ? { k: 'warn', t: friendly(err) } : { k: 'info', t: okMsg };
+    await reload();
+  }
+
   function reqCard(r) {
       const pend = r.status === 'pending';
       const asking = S.askCancel === r.id;
@@ -105,19 +128,19 @@
     const slots = S.slots.filter((x) => dayKey(x.starts_at) === S.day);
     const { a, b: z } = dayRange(S.day);
     const d = h('input', { id: 'addT', type: 'time', step: '300' });
-    const hasFree = slots.some((x) => x.status === 'free'), hasBlocked = slots.some((x) => x.status === 'blocked');
+    const closedDay = S.closed.has(S.day);
     parts.push(h('div', { class: 'addrow' },
       h('div', { class: 'f' }, h('label', { for: 'addT' }, 'Liberar um horário neste dia'), d),
       act('Liberar horário', () => { if (!d.value) return; run(sb.from('slots').insert({ starts_at: S.day + 'T' + d.value + ':00-03:00' }), 'Horário liberado.'); }, ''),
-      hasFree ? act('Fechar o dia todo', () => run(sb.from('slots').update({ status: 'blocked' }).eq('status', 'free').gte('starts_at', a).lte('starts_at', z), 'Dia fechado.'), 'danger') : null,
-      hasBlocked ? act('Reabrir o dia', () => run(sb.from('slots').update({ status: 'free' }).eq('status', 'blocked').gte('starts_at', a).lte('starts_at', z), 'Dia reaberto.'), '') : null));
+      closedDay ? act('Reabrir o dia', () => openDays(S.day, S.day, 'Dia reaberto.'), '') : act('Fechar o dia todo', () => closeDays(S.day, S.day, 'Dia fechado.'), 'danger')));
+    if (closedDay) parts.push(h('div', { class: 'notice info' }, 'Este dia está fechado. As clientes não veem horários nele.'));
 
-    if (!slots.length) parts.push(h('div', { class: 'empty' }, 'Nenhum horário neste dia.'));
+    if (!slots.length) parts.push(h('div', { class: 'empty' }, closedDay ? 'Dia fechado.' : 'Nenhum horário neste dia.'));
     else parts.push(h('div', { class: 'list' }, slots.map((x) => {
       const bk = bySlot[x.id];
       if (bk) return reqCard(bk);
       const btns = [];
-      if (x.status === 'free') btns.push(act('Bloquear', () => run(sb.from('slots').update({ status: 'blocked' }).eq('id', x.id))), act('Remover', () => run(sb.from('slots').delete().eq('id', x.id)), 'danger'));
+      if (x.status === 'free') btns.push(act('Bloquear', () => run(sb.from('slots').update({ status: 'blocked' }).eq('id', x.id))));
       else if (x.status === 'blocked') btns.push(act('Liberar', () => run(sb.from('slots').update({ status: 'free' }).eq('id', x.id))));
       return h('div', { class: 'slot' }, h('span', { class: 'tm' }, timeOf(x.starts_at)), h('span', { class: 'pill ' + STATUS[x.status] }, x.status === 'held' ? 'aguardando Pix' : STATUS[x.status]), h('span', { class: 'who' }, ''), h('div', { class: 'btns' }, btns));
     })));
@@ -135,12 +158,12 @@
     for (let i = 0; i < first; i++) cells.push(h('div', { class: 'cal-e' }));
     for (let n = 1; n <= total; n++) {
       const key = S.month + '-' + String(n).padStart(2, '0'), o = stat[key];
-      const cls = 'cal-d' + (key === hoje ? ' today' : '') + (key === S.day ? ' sel' : '') + (key < hoje ? ' past' : '');
+      const cls = 'cal-d' + (key === hoje ? ' today' : '') + (key === S.day ? ' sel' : '') + (key < hoje ? ' past' : '') + (S.closed.has(key) ? ' closed' : '');
       cells.push(h('button', { type: 'button', class: cls, onclick: () => { S.day = key; S.calOpen = false; render(); } },
         h('span', { class: 'cn' }, String(n)),
         o && o.ag ? h('span', { class: 'cd ag' }, o.ag + ' ag.') : null,
-        o && o.free ? h('span', { class: 'cd lv' }, o.free + ' livre' + (o.free > 1 ? 's' : '')) : null,
-        o && !o.free && !o.ag && o.blocked ? h('span', { class: 'cd bl' }, 'fechado') : null));
+        o && o.free && !S.closed.has(key) ? h('span', { class: 'cd lv' }, o.free + ' livre' + (o.free > 1 ? 's' : '')) : null,
+        S.closed.has(key) ? h('span', { class: 'cd bl' }, 'fechado') : (o && !o.free && !o.ag && o.blocked ? h('span', { class: 'cd bl' }, 'fechado') : null)));
     }
     return h('div', { class: 'cal' }, h('div', { class: 'cal-h' }, act('‹', () => move(-1), 'ghost'),
       h('b', {}, new Date(Y, M - 1, 1, 12).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })), act('›', () => move(1), 'ghost')),
@@ -149,43 +172,29 @@
   }
 
   function tabRotina() {
-    const hoje = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
-    const wk = h('input', { id: 'genW', type: 'number', min: '1', max: '26', value: '4', inputmode: 'numeric' });
-    const gen = h('div', { class: 'box' }, h('h4', {}, 'Gerar horários da rotina'),
-      h('p', { class: 'hint' }, 'Cria os horários de terça a sábado, do jeito combinado, para as próximas semanas. Horários que já existem não são repetidos.'),
-      h('div', { class: 'addrow' }, h('div', { class: 'f' }, h('label', { for: 'genW' }, 'Quantas semanas'), wk),
-        act('Gerar horários', async () => {
-          const n = Math.max(1, Math.min(26, Number(wk.value) || 4)), rows = [];
-          for (let i = 0; i < n * 7; i++) {
-            const day = new Date(hoje + 'T12:00:00-03:00'); day.setDate(day.getDate() + i);
-            const iso = day.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
-            const wd = new Date(iso + 'T12:00:00-03:00').getUTCDay();
-            ((CFG.horarios || {})[wd] || []).forEach((t) => { const at = new Date(iso + 'T' + t + ':00-03:00'); if (at > new Date()) rows.push({ starts_at: at.toISOString() }); });
-          }
-          if (!rows.length) return;
-          const { error } = await sb.from('slots').upsert(rows, { onConflict: 'starts_at', ignoreDuplicates: true });
-          S.msg = error ? { k: 'warn', t: friendly(error) } : { k: 'info', t: 'Horários gerados para ' + n + ' semana(s).' };
-          await reload();
-        }, '')));
+    const hoje = todayKey();
+    const NAMES = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+    const gen = h('div', { class: 'box' }, h('h4', {}, 'Horários de atendimento da semana'),
+      h('p', { class: 'hint' }, 'Esses horários se repetem toda semana, sozinhos, e ficam abertos para as clientes pelos próximos 60 dias. Para tirar um horário, toque no x. Para incluir, digite o horário e toque em Incluir.'),
+      [2, 3, 4, 5, 6, 0, 1].map((wd) => {
+        const list = S.weekly.filter((r) => r.weekday === wd).map((r) => String(r.at).slice(0, 5)).sort();
+        const t = h('input', { type: 'time', step: '300', 'aria-label': 'Novo horário de ' + NAMES[wd] });
+        return h('div', { class: 'wk' }, h('b', {}, NAMES[wd]),
+          h('div', { class: 'chips' }, list.length ? list.map((tm) => h('button', { type: 'button', class: 'chip', title: 'Tirar ' + tm, onclick: () => { if (confirm('Tirar ' + tm + ' de toda ' + NAMES[wd].toLowerCase() + '? Os horários livres futuros desse horário somem do site.')) run(sb.rpc('remove_weekly_hour', { p_weekday: wd, p_at: tm }), 'Horário retirado da rotina.'); } }, tm + ' ×')) : h('span', { class: 'hint' }, 'Fechado')),
+          h('div', { class: 'addrow' }, t, act('Incluir', () => { if (!t.value) return; run(sb.from('weekly_hours').insert({ weekday: wd, at: t.value }), 'Horário incluído. Já aparece no site.'); }, '')));
+      }));
     const f1 = h('input', { id: 'clA', type: 'date', min: hoje }), f2 = h('input', { id: 'clB', type: 'date', min: hoje });
     const range = () => ({ a: new Date(f1.value + 'T00:00:00-03:00').toISOString(), b: new Date(f2.value + 'T23:59:59-03:00').toISOString() });
     const close = h('div', { class: 'box' }, h('h4', {}, 'Fechar dias (viagem, folga)'),
-      h('p', { class: 'hint' }, 'Escolha o primeiro e o último dia. Os horários livres desse período ficam bloqueados e somem do site. Atendimentos já marcados não são mexidos: cancele em "Próximos atendimentos".'),
+      h('p', { class: 'hint' }, 'Escolha o primeiro e o último dia. Esses dias ficam fechados e somem do site (mesmo que ainda não tenha horário gerado neles). Atendimentos já marcados não são mexidos: cancele na aba Agenda.'),
       h('div', { class: 'addrow' }, h('div', { class: 'f' }, h('label', { for: 'clA' }, 'De'), f1), h('div', { class: 'f' }, h('label', { for: 'clB' }, 'Até'), f2),
-        act('Fechar período', async () => {
+        act('Fechar período', () => {
           if (!f1.value || !f2.value || f2.value < f1.value) { S.msg = { k: 'warn', t: 'Escolha o primeiro e o último dia.' }; return render(); }
-          const { a, b } = range();
-          const { error } = await sb.from('slots').update({ status: 'blocked' }).eq('status', 'free').gte('starts_at', a).lte('starts_at', b);
-          const kept = await sb.from('slots').select('id', { count: 'exact', head: true }).in('status', ['booked', 'held']).gte('starts_at', a).lte('starts_at', b);
-          S.msg = error ? { k: 'warn', t: friendly(error) } : { k: kept.count ? 'warn' : 'info', t: 'Período fechado.' + (kept.count ? ' Atenção: ' + kept.count + ' horário(s) já têm cliente e continuam ativos. Cancele na aba Agenda.' : '') };
-          await reload();
+          return closeDays(f1.value, f2.value, 'Período fechado.');
         }, 'danger'),
-        act('Reabrir período', async () => {
+        act('Reabrir período', () => {
           if (!f1.value || !f2.value || f2.value < f1.value) { S.msg = { k: 'warn', t: 'Escolha o primeiro e o último dia.' }; return render(); }
-          const { a, b } = range();
-          const { error } = await sb.from('slots').update({ status: 'free' }).eq('status', 'blocked').gte('starts_at', a).lte('starts_at', b);
-          S.msg = error ? { k: 'warn', t: friendly(error) } : { k: 'info', t: 'Período reaberto.' };
-          await reload();
+          return openDays(f1.value, f2.value, 'Período reaberto.');
         }, '')));
     return h('div', {}, gen, close);
   }

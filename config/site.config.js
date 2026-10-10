@@ -35,17 +35,6 @@ window.SITE = {
     ink: '#3A2A1B', muted: '#6F5C47', tan: '#B98A5A', gold: '#84590F', line: '#DAC7AB'
   },
 
-  // Rotina semanal de horários (0 = domingo ... 6 = sábado). Usada pelo botão "Gerar horários" do painel.
-  horarios: {
-    0: [],
-    1: [],
-    2: ['09:00', '11:30', '14:00', '16:30', '18:30'],
-    3: ['09:00', '11:30', '14:00', '16:30'],
-    4: ['09:00', '11:30', '14:00', '16:30', '18:30'],
-    5: ['09:00', '11:30', '14:00', '16:30', '18:30'],
-    6: ['09:00', '11:30', '14:30']
-  },
-
   regras: {
     prazoCancelamentoHoras: 24,   // acima disso: remarca/cancela sem perder o sinal
     reservaMinutos: 15,           // tempo que o horário fica segurado durante o pagamento
