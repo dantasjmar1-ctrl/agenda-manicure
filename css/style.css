@@ -1,3 +1,4 @@
+[hidden]{display:none !important}
 /* Layout: página única em coluna estreita, tom creme e caramelo do guia da Kailane, ouro da logo só em filetes e destaques. */
 :root{
   --bg:#F0E4D3; --surface:#FAF4EA; --soft:#E7D8C2; --ink:#3A2A1B; --muted:#6F5C47;
