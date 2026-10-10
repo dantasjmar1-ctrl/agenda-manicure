@@ -1,7 +1,7 @@
 (function () {
   const A = window.App;
   const { CFG, sb, $, h, money, digits, first, when, timeOf, dayKey, friendly } = A;
-  const S = { closed: new Set(), content: {}, saving: false, user: null, tab: 'agenda', day: null, month: null, calOpen: false, slots: [], bookings: [], services: [], msg: null, askCancel: null };
+  const S = { known: [], closed: new Set(), content: {}, saving: false, user: null, tab: 'agenda', day: null, month: null, calOpen: false, slots: [], bookings: [], services: [], msg: null, askCancel: null };
 
   const STATUS = { free: 'livre', held: 'pendente', booked: 'confirmado', blocked: 'bloqueado' };
   const BLABEL = { pending: 'aguardando Pix', confirmed: 'confirmado' };
@@ -15,12 +15,14 @@
 
   async function reload() {
     await sb.rpc('ensure_slots');
-    const [sl, bk, sv, cd] = await Promise.all([
+    const [sl, bk, sv, cd, kc] = await Promise.all([
       sb.from('slots').select('*').gte('starts_at', new Date(new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }) + 'T00:00:00-03:00').toISOString()).order('starts_at'),
       sb.from('bookings').select('*, slots(starts_at)').in('status', ['pending', 'confirmed']),
       sb.from('services').select('*').order('sort'),
-      sb.from('closed_days').select('day')
+      sb.from('closed_days').select('day'),
+      sb.from('known_clients').select('*').order('name')
     ]);
+    S.known = ((kc && kc.data) || []);
     S.closed = new Set(((cd && cd.data) || []).map((r) => r.day));
     S.slots = sl.data || []; S.services = sv.data || [];
     const ct = await sb.from('site_content').select('data').eq('id', 1).single();
@@ -58,9 +60,9 @@
     const hs = 24;
     const head = [h('div', { class: 'mh' }, h('h2', {}, 'Agenda'), h('button', { type: 'button', class: 'linkbtn', onclick: async () => { await sb.auth.signOut(); renderLogin(); } }, 'Sair')),
       h('p', { class: 'hint' }, 'Conectada como ' + S.user.email + '.'),
-      h('div', { class: 'tabs', role: 'tablist' }, tabBtn('agenda', 'Agenda', S.bookings.filter((b) => b.status === 'pending').length), tabBtn('rotina', 'Viagens e folgas'), tabBtn('servicos', 'Serviços'), tabBtn('site', 'Site e fotos'))];
+      h('div', { class: 'tabs', role: 'tablist' }, tabBtn('agenda', 'Agenda', S.bookings.filter((b) => b.status === 'pending').length), tabBtn('clientes', 'Clientes'), tabBtn('rotina', 'Viagens e folgas'), tabBtn('servicos', 'Serviços'), tabBtn('site', 'Site e fotos'))];
     if (S.msg) head.push(h('div', { class: 'notice' + (S.msg.k === 'info' ? ' info' : '') }, S.msg.t));
-    const body = S.tab === 'agenda' ? tabAgenda() : S.tab === 'rotina' ? tabRotina() : S.tab === 'servicos' ? tabServicos() : tabSite();
+    const body = S.tab === 'agenda' ? tabAgenda() : S.tab === 'clientes' ? tabClientes() : S.tab === 'rotina' ? tabRotina() : S.tab === 'servicos' ? tabServicos() : tabSite();
     $('box').replaceChildren(h('div', { class: 'panel' }, head, body));
   }
 
@@ -167,6 +169,36 @@
       h('b', {}, new Date(Y, M - 1, 1, 12).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })), act('›', () => move(1), 'ghost')),
       h('div', { class: 'cal-g' }, cells),
       h('p', { class: 'hint' }, 'ag. = atendimentos marcados. Toque em um dia para ver os detalhes.'));
+  }
+
+  function tabClientes() {
+    const hoje = todayKey();
+    const nome = h('input', { id: 'kName', placeholder: 'Nome da cliente', autocomplete: 'off' });
+    const zap = h('input', { id: 'kZap', type: 'tel', inputmode: 'tel', placeholder: '(11) 99999-8888', autocomplete: 'off' });
+    const data = h('input', { id: 'kDate', type: 'date', max: hoje });
+    const tipo = h('select', { id: 'kFam' }, h('option', { value: '' }, 'Não sei / vários'), h('option', { value: 'alongamento' }, 'Alongamento'), h('option', { value: 'gel' }, 'Banho de gel'));
+    const form = h('div', { class: 'box' }, h('h4', {}, 'Cadastrar cliente'),
+      h('p', { class: 'hint' }, 'Para clientes de antes do site, ou quem trocou de número. Sem data da última visita: ela fica liberada para manutenção sempre. Com a data e o tipo: o site confere os 15 dias e o tipo certo, como faz com as clientes do site.'),
+      h('div', { class: 'addrow' }, h('div', { class: 'f grow' }, h('label', { for: 'kName' }, 'Nome'), nome), h('div', { class: 'f grow' }, h('label', { for: 'kZap' }, 'WhatsApp com DDD'), zap)),
+      h('div', { class: 'addrow' }, h('div', { class: 'f grow' }, h('label', { for: 'kDate' }, 'Última visita (opcional)'), data), h('div', { class: 'f grow' }, h('label', { for: 'kFam' }, 'Tipo da última visita'), tipo),
+        act('Cadastrar', async () => {
+          const d = digits(zap.value).slice(-11);
+          if (nome.value.trim().length < 2 || d.length < 10) { S.msg = { k: 'warn', t: 'Informe o nome e o WhatsApp com DDD.' }; return render(); }
+          const row = { phone: d, name: nome.value.trim(), last_visit: data.value || null, family: data.value && tipo.value ? tipo.value : null };
+          const { error } = await sb.from('known_clients').upsert(row, { onConflict: 'phone' });
+          S.msg = error ? { k: 'warn', t: friendly(error) } : { k: 'info', t: 'Cliente cadastrada.' };
+          await reload();
+        }, '')));
+    const fmtZap = (d) => { d = String(d).slice(-11); return d.length === 11 ? '(' + d.slice(0, 2) + ') ' + d.slice(2, 7) + '-' + d.slice(7) : d; };
+    const fmtDay = (k) => k ? new Date(k + 'T12:00:00-03:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: TZ }) : '';
+    const mine = S.known.length ? S.known.map((k) => h('div', { class: 'slot' }, h('span', { class: 'who' }, h('b', {}, k.name), ' · ' + fmtZap(k.phone), h('br'), h('small', { class: 'hint' }, k.last_visit ? 'Última visita em ' + fmtDay(k.last_visit) + (k.family ? ' · ' + k.family : '') : 'Liberada para manutenção sempre')),
+      h('div', { class: 'btns' }, act('Remover', () => { if (confirm('Remover ' + k.name + ' da lista?')) run(sb.from('known_clients').delete().eq('phone', k.phone), 'Cliente removida.'); }, 'danger'))))
+      : [h('div', { class: 'empty' }, 'Nenhuma cliente cadastrada por você.')];
+    const by = {};
+    S.bookings.forEach((b) => { const k = digits(b.client_phone).slice(-11); const o = by[k] = by[k] || { name: b.client_name, phone: k, n: 0, last: null }; o.n++; const d = dayKey(b.starts_at); if (new Date(b.starts_at) < new Date() && (!o.last || d > o.last)) o.last = d; });
+    const site = Object.values(by).sort((a, b) => a.name.localeCompare(b.name));
+    return h('div', {}, form, h('h4', { class: 'sub' }, 'Cadastradas por você'), h('div', { class: 'list' }, mine),
+      h('h4', { class: 'sub' }, 'Clientes que agendaram pelo site'), site.length ? h('div', { class: 'list' }, site.map((c) => h('div', { class: 'slot' }, h('span', { class: 'who' }, h('b', {}, c.name), ' · ' + fmtZap(c.phone), h('br'), h('small', { class: 'hint' }, c.n + ' agendamento(s)' + (c.last ? ' · última visita ' + fmtDay(c.last) : '')))))) : h('div', { class: 'empty' }, 'Ainda não há agendamentos.'));
   }
 
   function tabRotina() {

@@ -264,3 +264,5 @@ footer{padding-block:56px 0}
 .plink{user-select:text;-webkit-user-select:text}
 .plink-url{font-weight:600;overflow-wrap:anywhere;color:var(--gold);text-decoration:underline}
 .plink .btn{justify-self:start;margin-top:6px}
+.sub{margin:18px 0 8px;font-family:var(--display);font-weight:500;font-size:18px}
+.f.grow{flex:1 1 200px;min-width:0}

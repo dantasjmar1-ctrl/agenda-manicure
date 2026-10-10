@@ -90,6 +90,11 @@
   function friendly(err) {
     const m = (err && err.message) || '';
     if (m.includes('slot_unavailable')) return 'Esse horário acabou de ser ocupado. Escolha outro.';
+    if (m.includes('maintenance_name_mismatch')) return 'Esse WhatsApp está cadastrado com outro nome. Confira o nome digitado ou chame a gente no WhatsApp para ajudar.';
+    if (m.includes('maintenance_use_over15')) return 'Pela data da sua última visita já passaram mais de 15 dias. Escolha a opção "mais de 15 dias" da manutenção.';
+    if (m.includes('maintenance_use_under15')) return 'Pela data da sua última visita ainda não passaram 15 dias. Escolha a opção "até 15 dias" da manutenção.';
+    if (m.includes('maintenance_wrong_type_gel')) return 'Sua última visita foi de banho de gel. Escolha a manutenção de banho de gel.';
+    if (m.includes('maintenance_wrong_type_alongamento')) return 'Sua última visita foi de alongamento. Escolha a manutenção de alongamento.';
     if (m.includes('maintenance_not_allowed')) return 'A manutenção é só para quem já fez aplicação com a gente nos últimos dias. Se é a sua primeira vez, escolha uma aplicação, ou "Manutenção de outra profissional" se suas unhas são de outra profissional.';
     if (m.includes('too_late')) return 'Faltam menos de 24 horas, então não dá mais para remarcar sem perder o sinal.';
     if (m.includes('invalid_data')) return 'Confira seu nome e WhatsApp.';
