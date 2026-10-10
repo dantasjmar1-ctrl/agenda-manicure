@@ -260,3 +260,4 @@ footer{padding-block:56px 0}
 .cal-d.sel{background:var(--gold);color:var(--on-gold)}
 .cal-d.sel .cd{color:var(--on-gold)}
 .cal-d.closed{background:var(--soft);border-style:dashed}
+#agendar fieldset,#times,#stepnav{scroll-margin-top:84px}

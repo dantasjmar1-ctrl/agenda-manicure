@@ -39,15 +39,26 @@
     $('tblExtra').replaceChildren(h('h3', {}, 'Procedimentos adicionais'), h('ul', {}, rest.map((x) => h('li', {}, x.name + ' ', h('b', {}, money(x.price))))));
   }
 
+  // Desce a página sozinha até o próximo passo, para a cliente não precisar procurar
+  function descer(el, bloco) {
+    if (!el) return;
+    const calmo = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    setTimeout(() => { try { el.scrollIntoView({ behavior: calmo ? 'auto' : 'smooth', block: bloco || 'start' }); } catch (e) { el.scrollIntoView(); } }, 120);
+  }
+
   /* ---------- passo 1: serviços ---------- */
   function renderOpts() {
     const mk = (list, type, name, isSel, onSel) => list.map((o) => {
       const inp = h('input', { type, name, value: o.id });
       inp.checked = isSel(o.id);
-      inp.addEventListener('change', () => { onSel(o.id, inp.checked); summary(); });
+      inp.addEventListener('change', () => { onSel(o.id, inp.checked); summary(); if (type === 'radio') descer($('extraList').closest('fieldset')); });
       return h('label', { class: 'opt' }, inp, h('span', {}, o.name), h('b', {}, money(o.price)));
     });
-    $('mainList').replaceChildren(...mk(mains(), 'radio', 'main', (id) => S.main === id, (id) => { S.main = id; }));
+    const gated = mains().some((o) => o.needs_history);
+    const dias = (S.settings && S.settings.maintenance_days) || 30;
+    const list = mk(mains(), 'radio', 'main', (id) => S.main === id, (id) => { S.main = id; });
+    if (gated) list.push(h('p', { class: 'hint' }, 'Manutenção é para quem já fez aplicação com a gente nos últimos ' + dias + ' dias. Cliente nova com unhas de outra profissional: escolha "Manutenção de outra profissional".'));
+    $('mainList').replaceChildren(...list);
     $('extraList').replaceChildren(...mk(extras(), 'checkbox', 'extra', (id) => S.extra.has(id), (id, on) => { on ? S.extra.add(id) : S.extra.delete(id); }));
   }
 
@@ -59,7 +70,7 @@
     if (S.day && !keys[S.day]) { S.day = null; S.slot = null; }
     box.replaceChildren(...ds.map((d) => {
       const x = new Date(d + 'T12:00:00-03:00');
-      return h('button', { type: 'button', class: 'day', 'aria-pressed': String(S.day === d), onclick: () => { S.day = d; S.slot = null; renderDays(); summary(); } },
+      return h('button', { type: 'button', class: 'day', 'aria-pressed': String(S.day === d), onclick: () => { S.day = d; S.slot = null; renderDays(); summary(); descer($('times'), 'center'); } },
         h('small', {}, x.toLocaleDateString('pt-BR', { weekday: 'short', timeZone: 'America/Sao_Paulo' }).replace('.', '')),
         h('strong', {}, d.slice(8, 10)),
         h('em', {}, x.toLocaleDateString('pt-BR', { month: 'short', timeZone: 'America/Sao_Paulo' }).replace('.', '')));
@@ -71,7 +82,7 @@
     if (!S.day) { box.replaceChildren(); $('slotHint').textContent = 'Escolha um dia para ver os horários.'; return; }
     const list = S.slots.filter((s) => dayKey(s.starts_at) === S.day);
     if (S.slot && !list.some((s) => s.id === S.slot.id)) S.slot = null;
-    box.replaceChildren(...list.map((s) => h('button', { type: 'button', class: 'time', 'aria-pressed': String(!!S.slot && S.slot.id === s.id), onclick: () => { S.slot = s; renderTimes(); summary(); } }, timeOf(s.starts_at))));
+    box.replaceChildren(...list.map((s) => h('button', { type: 'button', class: 'time', 'aria-pressed': String(!!S.slot && S.slot.id === s.id), onclick: () => { S.slot = s; renderTimes(); summary(); descer($('stepnav'), 'center'); } }, timeOf(s.starts_at))));
     $('slotHint').textContent = S.slot ? 'Horário escolhido: ' + when(S.slot.starts_at) + '.' : 'Escolha um horário.';
   }
   function renderNext() {
