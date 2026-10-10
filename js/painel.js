@@ -1,7 +1,7 @@
 (function () {
   const A = window.App;
   const { CFG, sb, $, h, money, digits, first, when, timeOf, dayKey, friendly } = A;
-  const S = { content: {}, saving: false, user: null, tab: 'proximos', slots: [], bookings: [], services: [], msg: null, askCancel: null };
+  const S = { content: {}, saving: false, user: null, tab: 'agenda', day: null, month: null, calOpen: false, slots: [], bookings: [], services: [], msg: null, askCancel: null };
 
   const STATUS = { free: 'livre', held: 'pendente', booked: 'confirmado', blocked: 'bloqueado' };
   const BLABEL = { pending: 'aguardando Pix', confirmed: 'confirmado' };
@@ -15,7 +15,7 @@
 
   async function reload() {
     const [sl, bk, sv] = await Promise.all([
-      sb.from('slots').select('*').gt('starts_at', new Date(Date.now() - 3600e3).toISOString()).order('starts_at'),
+      sb.from('slots').select('*').gte('starts_at', new Date(new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }) + 'T00:00:00-03:00').toISOString()).order('starts_at'),
       sb.from('bookings').select('*, slots(starts_at)').in('status', ['pending', 'confirmed']),
       sb.from('services').select('*').order('sort')
     ]);
@@ -55,21 +55,25 @@
     const hs = 24;
     const head = [h('div', { class: 'mh' }, h('h2', {}, 'Agenda'), h('button', { type: 'button', class: 'linkbtn', onclick: async () => { await sb.auth.signOut(); renderLogin(); } }, 'Sair')),
       h('p', { class: 'hint' }, 'Conectada como ' + S.user.email + '.'),
-      h('div', { class: 'tabs', role: 'tablist' }, tabBtn('proximos', 'Próximos atendimentos', S.bookings.length), tabBtn('agenda', 'Horários'), tabBtn('servicos', 'Serviços'), tabBtn('site', 'Site e fotos'))];
+      h('div', { class: 'tabs', role: 'tablist' }, tabBtn('agenda', 'Agenda', S.bookings.filter((b) => b.status === 'pending').length), tabBtn('rotina', 'Rotina e viagens'), tabBtn('servicos', 'Serviços'), tabBtn('site', 'Site e fotos'))];
     if (S.msg) head.push(h('div', { class: 'notice' + (S.msg.k === 'info' ? ' info' : '') }, S.msg.t));
-    const body = S.tab === 'proximos' ? tabProximos() : S.tab === 'agenda' ? tabAgenda() : S.tab === 'servicos' ? tabServicos() : tabSite();
+    const body = S.tab === 'agenda' ? tabAgenda() : S.tab === 'rotina' ? tabRotina() : S.tab === 'servicos' ? tabServicos() : tabSite();
     $('box').replaceChildren(h('div', { class: 'panel' }, head, body));
   }
 
-  function tabProximos() {
-    if (!S.bookings.length) return h('div', { class: 'empty' }, 'Nenhum atendimento agendado.');
-    return h('div', { class: 'list' }, S.bookings.map((r) => {
+  const TZ = 'America/Sao_Paulo';
+  const todayKey = () => new Date().toLocaleDateString('en-CA', { timeZone: TZ });
+  const addDays = (key, n) => { const d = new Date(key + 'T12:00:00-03:00'); d.setDate(d.getDate() + n); return d.toLocaleDateString('en-CA', { timeZone: TZ }); };
+  const longDay = (key) => new Date(key + 'T12:00:00-03:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', timeZone: TZ });
+  const dayRange = (key) => ({ a: new Date(key + 'T00:00:00-03:00').toISOString(), b: new Date(key + 'T23:59:59-03:00').toISOString() });
+
+  function reqCard(r) {
       const pend = r.status === 'pending';
       const asking = S.askCancel === r.id;
       return h('div', { class: 'req' },
         h('div', { class: 'h' }, h('b', {}, r.client_name), h('span', { class: 'w' }, when(r.starts_at))),
         h('ul', {}, r.service_ids.map((s) => h('li', {}, svcName(s)))),
-        h('div', { class: 'note' }, h('span', { class: 'pill ' + (pend ? 'pendente' : 'confirmado') }, BLABEL[r.status]), ' Total ' + money(r.total) + ' · sinal ' + money(r.deposit) + (pend ? ' (a pagar)' : ' pago') + ' · falta ' + money(r.total - r.deposit) + ' · ' + r.client_phone + (r.note ? ' · "' + r.note + '"' : '')),
+        h('div', { class: 'note' }, h('span', { class: 'pill ' + (pend ? 'pendente' : 'confirmado') }, BLABEL[r.status]), ' Total ' + money(r.total) + (Number(r.deposit) > 0 ? ' · sinal ' + money(r.deposit) + (pend ? ' (a pagar)' : ' pago') + ' · falta ' + money(r.total - r.deposit) : ' · sem sinal, pagar no atendimento') + ' · ' + r.client_phone + (r.note ? ' · "' + r.note + '"' : '')),
         asking ? h('div', { class: 'ask' }, h('b', {}, 'O que fazer com o sinal de ' + money(r.deposit) + '?'),
           h('div', { class: 'btns' },
             !pend ? act('Cancelar e devolver o sinal', () => run(sb.rpc('owner_cancel_booking', { p_booking: r.id, p_refund: true }), 'Horário cancelado. Lembre de devolver o sinal por Pix.'), 'danger') : null,
@@ -78,18 +82,73 @@
           : h('div', { class: 'btns' },
             pend ? act('Confirmar Pix recebido', () => run(sb.rpc('owner_confirm_booking', { p_booking: r.id }), 'Horário confirmado.'), '') : null,
             h('a', { class: 'btn small ghost', href: 'https://wa.me/55' + digits(r.client_phone) + '?text=' + encodeURIComponent('Oi, ' + first(r.client_name) + '! Aqui é a ' + first(CFG.nome) + ', sobre seu horário de ' + when(r.starts_at) + '.'), target: '_blank', rel: 'noopener' }, 'Chamar no WhatsApp'),
-            act('Cancelar horário', () => { S.askCancel = r.id; render(); }, 'danger')));
-    }));
+            act('Cancelar horário', () => { if (Number(r.deposit) > 0) { S.askCancel = r.id; render(); } else if (confirm('Cancelar este horário?')) run(sb.rpc('owner_cancel_booking', { p_booking: r.id, p_refund: false }), 'Horário cancelado.'); }, 'danger')));
   }
 
   function tabAgenda() {
-    const d = h('input', { id: 'addD', type: 'date', min: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }) });
-    const t = h('input', { id: 'addT', type: 'time', step: '900' });
-    const add = h('div', { class: 'addrow' }, h('div', { class: 'f' }, h('label', { for: 'addD' }, 'Dia'), d), h('div', { class: 'f' }, h('label', { for: 'addT' }, 'Horário'), t),
-      act('Liberar horário', () => {
-        if (!d.value || !t.value) return;
-        run(sb.from('slots').insert({ starts_at: d.value + 'T' + t.value + ':00-03:00' }), 'Horário liberado.');
-      }, ''));
+    const hoje = todayKey();
+    if (!S.day) S.day = hoje;
+    const bySlot = {}; S.bookings.forEach((b) => { bySlot[b.slot_id] = b; });
+    const nav = h('div', { class: 'daynav' },
+      act('‹', () => { S.day = addDays(S.day, -1); S.month = S.day.slice(0, 7); render(); }, 'ghost'),
+      h('div', { class: 'dn-title' }, h('b', {}, S.day === hoje ? 'Hoje' : longDay(S.day)), S.day === hoje ? h('span', {}, longDay(S.day)) : null),
+      act('›', () => { S.day = addDays(S.day, 1); S.month = S.day.slice(0, 7); render(); }, 'ghost'),
+      S.day !== hoje ? act('Voltar para hoje', () => { S.day = hoje; S.month = hoje.slice(0, 7); render(); }, '') : null,
+      act(S.calOpen ? 'Fechar calendário' : 'Ver calendário', () => { S.calOpen = !S.calOpen; if (S.calOpen) S.month = S.day.slice(0, 7); render(); }, 'ghost'));
+
+    const parts = [nav];
+    if (S.calOpen) parts.push(calendar(hoje, bySlot));
+
+    const pend = S.bookings.filter((b) => b.status === 'pending');
+    if (pend.length) parts.push(h('p', { class: 'hint' }, pend.length + ' agendamento(s) aguardando o Pix. Eles aparecem nos dias marcados.'));
+
+    const slots = S.slots.filter((x) => dayKey(x.starts_at) === S.day);
+    const { a, b: z } = dayRange(S.day);
+    const d = h('input', { id: 'addT', type: 'time', step: '300' });
+    const hasFree = slots.some((x) => x.status === 'free'), hasBlocked = slots.some((x) => x.status === 'blocked');
+    parts.push(h('div', { class: 'addrow' },
+      h('div', { class: 'f' }, h('label', { for: 'addT' }, 'Liberar um horário neste dia'), d),
+      act('Liberar horário', () => { if (!d.value) return; run(sb.from('slots').insert({ starts_at: S.day + 'T' + d.value + ':00-03:00' }), 'Horário liberado.'); }, ''),
+      hasFree ? act('Fechar o dia todo', () => run(sb.from('slots').update({ status: 'blocked' }).eq('status', 'free').gte('starts_at', a).lte('starts_at', z), 'Dia fechado.'), 'danger') : null,
+      hasBlocked ? act('Reabrir o dia', () => run(sb.from('slots').update({ status: 'free' }).eq('status', 'blocked').gte('starts_at', a).lte('starts_at', z), 'Dia reaberto.'), '') : null));
+
+    if (!slots.length) parts.push(h('div', { class: 'empty' }, 'Nenhum horário neste dia.'));
+    else parts.push(h('div', { class: 'list' }, slots.map((x) => {
+      const bk = bySlot[x.id];
+      if (bk) return reqCard(bk);
+      const btns = [];
+      if (x.status === 'free') btns.push(act('Bloquear', () => run(sb.from('slots').update({ status: 'blocked' }).eq('id', x.id))), act('Remover', () => run(sb.from('slots').delete().eq('id', x.id)), 'danger'));
+      else if (x.status === 'blocked') btns.push(act('Liberar', () => run(sb.from('slots').update({ status: 'free' }).eq('id', x.id))));
+      return h('div', { class: 'slot' }, h('span', { class: 'tm' }, timeOf(x.starts_at)), h('span', { class: 'pill ' + STATUS[x.status] }, x.status === 'held' ? 'aguardando Pix' : STATUS[x.status]), h('span', { class: 'who' }, ''), h('div', { class: 'btns' }, btns));
+    })));
+    return h('div', {}, parts);
+  }
+
+  function calendar(hoje, bySlot) {
+    const [Y, M] = S.month.split('-').map(Number);
+    const first = new Date(Y, M - 1, 1, 12).getDay(), total = new Date(Y, M, 0).getDate();
+    const stat = {};
+    S.slots.forEach((x) => { const k = dayKey(x.starts_at); if (k.slice(0, 7) !== S.month) return; const o = stat[k] = stat[k] || { ag: 0, free: 0, blocked: 0 }; if (x.status === 'free') o.free++; else if (x.status === 'blocked') o.blocked++; else o.ag++; });
+    const move = (n) => { const d = new Date(Y, M - 1 + n, 1, 12); S.month = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); render(); };
+    const cells = [];
+    ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'].forEach((w) => cells.push(h('div', { class: 'cal-w' }, w)));
+    for (let i = 0; i < first; i++) cells.push(h('div', { class: 'cal-e' }));
+    for (let n = 1; n <= total; n++) {
+      const key = S.month + '-' + String(n).padStart(2, '0'), o = stat[key];
+      const cls = 'cal-d' + (key === hoje ? ' today' : '') + (key === S.day ? ' sel' : '') + (key < hoje ? ' past' : '');
+      cells.push(h('button', { type: 'button', class: cls, onclick: () => { S.day = key; S.calOpen = false; render(); } },
+        h('span', { class: 'cn' }, String(n)),
+        o && o.ag ? h('span', { class: 'cd ag' }, o.ag + ' ag.') : null,
+        o && o.free ? h('span', { class: 'cd lv' }, o.free + ' livre' + (o.free > 1 ? 's' : '')) : null,
+        o && !o.free && !o.ag && o.blocked ? h('span', { class: 'cd bl' }, 'fechado') : null));
+    }
+    return h('div', { class: 'cal' }, h('div', { class: 'cal-h' }, act('‹', () => move(-1), 'ghost'),
+      h('b', {}, new Date(Y, M - 1, 1, 12).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })), act('›', () => move(1), 'ghost')),
+      h('div', { class: 'cal-g' }, cells),
+      h('p', { class: 'hint' }, 'ag. = atendimentos marcados. Toque em um dia para ver os detalhes.'));
+  }
+
+  function tabRotina() {
     const hoje = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
     const wk = h('input', { id: 'genW', type: 'number', min: '1', max: '26', value: '4', inputmode: 'numeric' });
     const gen = h('div', { class: 'box' }, h('h4', {}, 'Gerar horários da rotina'),
@@ -118,7 +177,7 @@
           const { a, b } = range();
           const { error } = await sb.from('slots').update({ status: 'blocked' }).eq('status', 'free').gte('starts_at', a).lte('starts_at', b);
           const kept = await sb.from('slots').select('id', { count: 'exact', head: true }).in('status', ['booked', 'held']).gte('starts_at', a).lte('starts_at', b);
-          S.msg = error ? { k: 'warn', t: friendly(error) } : { k: kept.count ? 'warn' : 'info', t: 'Período fechado.' + (kept.count ? ' Atenção: ' + kept.count + ' horário(s) já têm cliente e continuam ativos. Cancele em "Próximos atendimentos".' : '') };
+          S.msg = error ? { k: 'warn', t: friendly(error) } : { k: kept.count ? 'warn' : 'info', t: 'Período fechado.' + (kept.count ? ' Atenção: ' + kept.count + ' horário(s) já têm cliente e continuam ativos. Cancele na aba Agenda.' : '') };
           await reload();
         }, 'danger'),
         act('Reabrir período', async () => {
@@ -128,18 +187,7 @@
           S.msg = error ? { k: 'warn', t: friendly(error) } : { k: 'info', t: 'Período reaberto.' };
           await reload();
         }, '')));
-    const byDay = {}; S.slots.filter((s) => new Date(s.starts_at) > new Date()).forEach((s) => { (byDay[dayKey(s.starts_at)] = byDay[dayKey(s.starts_at)] || []).push(s); });
-    const bySlot = {}; S.bookings.forEach((b) => { bySlot[b.slot_id] = b; });
-    return h('div', {}, gen, close, add, Object.keys(byDay).sort().map((day) => h('div', { class: 'dayblock' },
-      h('h4', {}, new Date(day + 'T12:00:00-03:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', timeZone: 'America/Sao_Paulo' })),
-      byDay[day].map((s) => {
-        const b = bySlot[s.id], btns = [];
-        if (s.status === 'free') btns.push(act('Bloquear', () => run(sb.from('slots').update({ status: 'blocked' }).eq('id', s.id))), act('Remover', () => run(sb.from('slots').delete().eq('id', s.id)), 'danger'));
-        else if (s.status === 'blocked') btns.push(act('Liberar', () => run(sb.from('slots').update({ status: 'free' }).eq('id', s.id))));
-        else btns.push(act('Ver atendimento', () => { S.tab = 'proximos'; render(); }));
-        return h('div', { class: 'slot' }, h('span', { class: 'tm' }, timeOf(s.starts_at)), h('span', { class: 'pill ' + STATUS[s.status] }, s.status === 'held' ? 'aguardando Pix' : STATUS[s.status]),
-          h('span', { class: 'who' }, b ? b.client_name + ' · ' + b.service_ids.map(svcName).join(', ') : ''), h('div', { class: 'btns' }, btns));
-      }))));
+    return h('div', {}, gen, close);
   }
 
   function tabServicos() {
