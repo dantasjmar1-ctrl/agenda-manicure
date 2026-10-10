@@ -33,15 +33,25 @@
 
   // Conteúdo editável pela dona (tabela site_content). Se falhar, o site usa o que está em config/.
   CFG.fotos = {};
+  // Aplica o conteúdo editável (textos, contatos, fotos) em CFG
+  function applyContent(d) {
+    d = d || {};
+    if (d.textos) CFG.textos = Object.assign({}, CFG.textos, d.textos);
+    if (d.whatsapp) CFG.whatsapp = digitsOnly(d.whatsapp);
+    if (d.instagram) CFG.instagram = String(d.instagram).replace(/^@/, '');
+    if (Array.isArray(d.nailArt)) CFG.nailArt = d.nailArt;
+    CFG.fotos = d.fotos || {};
+  }
+  // Mostra de imediato o que foi visto na última visita (as fotos aparecem sem esperar a internet)
+  function loadCachedContent() {
+    try { const v = localStorage.getItem('siteContent'); if (v) applyContent(JSON.parse(v)); } catch (e) { /* sem cache: tudo bem */ }
+  }
   async function loadContent() {
     try {
       const { data } = await sb.from('site_content').select('data').eq('id', 1).single();
       const d = (data && data.data) || {};
-      if (d.textos) CFG.textos = Object.assign({}, CFG.textos, d.textos);
-      if (d.whatsapp) CFG.whatsapp = digitsOnly(d.whatsapp);
-      if (d.instagram) CFG.instagram = String(d.instagram).replace(/^@/, '');
-      if (Array.isArray(d.nailArt)) CFG.nailArt = d.nailArt;
-      if (d.fotos) CFG.fotos = d.fotos;
+      applyContent(d);
+      try { localStorage.setItem('siteContent', JSON.stringify(d)); } catch (e) { /* sem cache: tudo bem */ }
       return d;
     } catch (e) { return {}; }
   }
@@ -103,6 +113,18 @@
     return 'Algo deu errado. Tente de novo em instantes.';
   }
 
-  window.App = { CFG, sb, $, h, money, digits, first, fmt, dayKey, timeOf, when, rules, depositPct,
-    applyTheme, loadContent, img, waPretty, waLink, copy, loadServices, loadSettings, friendly };
+  // chama uma função do servidor (Edge Function). jwt só é usado pelo painel.
+  async function callFn(name, body, jwt) {
+    const r = await fetch(CFG.supabase.url + '/functions/v1/' + name, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: CFG.supabase.anonKey, Authorization: 'Bearer ' + (jwt || CFG.supabase.anonKey) },
+      body: JSON.stringify(body)
+    });
+    let data = null; try { data = await r.json(); } catch (e) { /* sem corpo */ }
+    if (!r.ok) throw new Error((data && data.error) || 'erro');
+    return data;
+  }
+
+  window.App = { CFG, sb, callFn, $, h, money, digits, first, fmt, dayKey, timeOf, when, rules, depositPct,
+    applyTheme, loadContent, loadCachedContent, img, waPretty, waLink, copy, loadServices, loadSettings, friendly };
 })();

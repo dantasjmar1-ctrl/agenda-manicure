@@ -13,6 +13,22 @@
     await reload();
   }
 
+  // cancela e devolve o sinal; com Mercado Pago a devolução é automática
+  async function cancelRefund(r) {
+    const auto = CFG.pagamento.provedor === 'mercadopago';
+    const { error } = await sb.rpc('owner_cancel_booking', { p_booking: r.id, p_refund: true });
+    if (error) { S.msg = { k: 'warn', t: friendly(error) }; return reload(); }
+    if (!auto) { S.msg = { k: 'info', t: 'Horário cancelado. Lembre de devolver o sinal por Pix.' }; return reload(); }
+    try {
+      const { data } = await sb.auth.getSession();
+      await window.App.callFn('devolver-sinal', { booking_id: r.id }, data.session.access_token);
+      S.msg = { k: 'info', t: 'Horário cancelado e sinal devolvido por Pix.' };
+    } catch (e) {
+      S.msg = { k: 'warn', t: 'Horário cancelado, mas a devolução automática falhou. Devolva o sinal pelo app do Mercado Pago.' };
+    }
+    await reload();
+  }
+
   async function reload() {
     await sb.rpc('ensure_slots');
     const [sl, bk, sv, cd, kc] = await Promise.all([
@@ -99,7 +115,7 @@
         h('div', { class: 'note' }, h('span', { class: 'pill ' + (pend ? 'pendente' : 'confirmado') }, BLABEL[r.status]), ' Total ' + money(r.total) + (Number(r.deposit) > 0 ? ' · sinal ' + money(r.deposit) + (pend ? ' (a pagar)' : ' pago') + ' · falta ' + money(r.total - r.deposit) : ' · sem sinal, pagar no atendimento') + ' · ' + r.client_phone + (r.note ? ' · "' + r.note + '"' : '')),
         asking ? h('div', { class: 'ask' }, h('b', {}, 'O que fazer com o sinal de ' + money(r.deposit) + '?'),
           h('div', { class: 'btns' },
-            !pend ? act('Cancelar e devolver o sinal', () => run(sb.rpc('owner_cancel_booking', { p_booking: r.id, p_refund: true }), 'Horário cancelado. Lembre de devolver o sinal por Pix.'), 'danger') : null,
+            !pend ? act('Cancelar e devolver o sinal', () => cancelRefund(r), 'danger') : null,
             !pend ? act('Cancelar e ficar com o sinal', () => run(sb.rpc('owner_cancel_booking', { p_booking: r.id, p_refund: false }), 'Horário cancelado. O sinal ficou com você.'), 'danger') : act('Cancelar', () => run(sb.rpc('owner_cancel_booking', { p_booking: r.id, p_refund: false }), 'Horário liberado.'), 'danger'),
             act('Voltar', () => { S.askCancel = null; render(); })))
           : h('div', { class: 'btns' },

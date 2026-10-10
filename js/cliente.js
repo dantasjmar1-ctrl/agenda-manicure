@@ -237,15 +237,17 @@
   }
 
   async function init() {
-    await A.loadContent(); A.applyTheme(); renderStatic();
-    try {
-      [S.services, S.settings] = await Promise.all([A.loadServices(), A.loadSettings()]);
-      await loadSlots();
-    } catch (e) {
-      $('agendar').prepend(h('div', { class: 'notice' }, 'Não foi possível carregar a agenda agora. Tente de novo em instantes ou chame no WhatsApp.'));
-      return;
-    }
+    A.loadCachedContent(); A.applyTheme(); renderStatic();            // aparece na hora, com o que já foi visto
+    const pContent = A.loadContent();                                  // tudo abaixo busca ao mesmo tempo
+    const pData = Promise.all([A.loadServices(), A.loadSettings()]);
+    const pSlots = loadSlots();
+    pData.catch(() => {}); pSlots.catch(() => {});
+    await pContent; A.applyTheme(); renderStatic();
+    const falhou = () => $('agendar').prepend(h('div', { class: 'notice' }, 'Não foi possível carregar a agenda agora. Tente de novo em instantes ou chame no WhatsApp.'));
+    try { [S.services, S.settings] = await pData; } catch (e) { falhou(); return; }
     $('agendarSub').textContent = 'Escolha o serviço e um horário livre. Para garantir, você paga um sinal de ' + pct() + '% por Pix e o horário confirma na hora.';
+    renderCatalog();
+    try { await pSlots; } catch (e) { falhou(); return; }
     renderCatalog(); renderOpts(); renderDays(); renderNext();
     $('form').addEventListener('submit', submit);
     $('stepNext').addEventListener('click', nextStep);

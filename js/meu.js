@@ -70,6 +70,7 @@
           const { data, error } = await sb.rpc('cancel_booking', { p_token: token });
           if (error) { err.hidden = false; err.textContent = friendly(error); ev.target.disabled = false; return; }
           if (thenBook) { location.href = 'index.html#agendar'; return; }
+          if (data === 'refunded' && CFG.pagamento.provedor === 'mercadopago') A.callFn('devolver-sinal', { token }).catch(() => { /* a dona devolve manualmente se falhar */ });
           S.result = data; render();
         } }, yes),
         h('button', { class: 'btn small ghost', type: 'button', onclick: () => { S.ask = null; render(); } }, 'Voltar')));

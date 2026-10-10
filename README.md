@@ -8,12 +8,13 @@ Um modelo único, usado por várias manicures. Cada uma tem a própria cópia, b
 index.html, meu.html, painel.html   páginas: cliente, link pessoal, painel da dona
 css/, js/                           visual e lógica
 config/                             configuração e imagens de cada manicure (é o que muda entre clientes)
-supabase/                           banco: schema.sql, seed.sql, 002 a 006 (funções, conteúdo, manutenção e clientes, dias fechados, horários automáticos)
+supabase/                           banco: schema.sql, seed.sql, 002 a 007 (funções, conteúdo, manutenção e clientes, dias fechados, horários automáticos, Pix automático)
+supabase/functions/                funções do servidor (Pix do Mercado Pago)
 docs/                               documentação do projeto
 ```
 
 ## Ordem para montar um site novo
-1. Criar projeto no Supabase e rodar `schema.sql`, `seed.sql`, `002_funcoes_site.sql`, `003_conteudo_site.sql`, `004_manutencao_e_clientes.sql`, `005_dias_fechados.sql` e `006_horarios_automaticos.sql` (nessa ordem).
+1. Criar projeto no Supabase e rodar `schema.sql`, `seed.sql`, `002_funcoes_site.sql`, `003_conteudo_site.sql`, `004_manutencao_e_clientes.sql`, `005_dias_fechados.sql` `006_horarios_automaticos.sql` e `007_mercadopago.sql` (nessa ordem). Depois, seguir `docs/mercadopago.md`.
 2. `insert into owner values ('email-da-dona')` e criar o mesmo e-mail em Authentication > Users.
 3. Preencher `config/site.config.js` (nome, cores, serviços, URL e chave pública do Supabase).
 4. Publicar na Vercel.
