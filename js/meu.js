@@ -22,7 +22,7 @@
     if (S.result) {
       const r = S.result;
       box.replaceChildren(h('div', { class: 'meu' }, h('h2', {}, 'Horário cancelado'),
-        h('p', { class: 'hint' }, 'O horário foi liberado.' + (r === 'refunded' ? ' O sinal de ' + money(S.b.deposit) + ' será devolvido a você por Pix.' : r === 'forfeited' ? ' O sinal de ' + money(S.b.deposit) + ' não é devolvido.' : '')),
+        h('p', { class: 'hint' }, 'O horário foi liberado.' + (r === 'refunded' ? ' O sinal de ' + money(S.b.deposit) + ' será devolvido a você por Pix, na mesma conta que pagou, em até 24 horas.' : r === 'forfeited' ? ' O sinal de ' + money(S.b.deposit) + ' não é devolvido.' : '')),
         h('div', { class: 'actions', style: 'justify-content:flex-start' }, home())));
       return;
     }
@@ -46,10 +46,10 @@
       if (S.ask === 'cancel') parts.push(askBox('Desistir deste horário?', 'Você ainda não pagou o sinal, então nada é cobrado.', 'Sim, desistir', false));
     } else {
       parts.push(can
-        ? h('p', { class: 'hint' }, 'Faltam ' + leftText(hrs) + '. Remarcando até ' + hs + ' horas antes, o sinal de ' + money(dep) + ' passa para o novo horário. Cancelando, o sinal é devolvido por Pix.')
+        ? h('p', { class: 'hint' }, 'Faltam ' + leftText(hrs) + '. Remarcando até ' + hs + ' horas antes, o sinal de ' + money(dep) + ' passa para o novo horário. Cancelando, o sinal é devolvido por Pix, em até 24 horas.')
         : h('div', { class: 'notice' }, 'Faltam menos de ' + hs + ' horas (' + leftText(hrs) + '). Se remarcar agora, você perde o sinal de ' + money(dep) + ' e precisa pagar um novo sinal no novo horário. Se cancelar, o sinal também não é devolvido.'));
       if (S.ask === 'cancel') parts.push(askBox(can ? 'Cancelar este horário?' : 'Cancelar com menos de ' + hs + ' horas?',
-        can ? 'O sinal de ' + money(dep) + ' será devolvido por Pix e o horário volta a ficar livre. Se preferir manter o sinal, use Remarcar.' : 'O sinal de ' + money(dep) + ' não é devolvido e o horário volta a ficar livre para outras clientes.',
+        can ? 'O sinal de ' + money(dep) + ' será devolvido por Pix, em até 24 horas, e o horário volta a ficar livre. Se preferir manter o sinal, use Remarcar.' : 'O sinal de ' + money(dep) + ' não é devolvido e o horário volta a ficar livre para outras clientes.',
         can ? 'Sim, cancelar e receber o sinal de volta' : 'Sim, cancelar e perder o sinal', false));
       else if (S.ask === 'resched') parts.push(askBox('Remarcar com menos de ' + hs + ' horas?', 'Você perde o sinal de ' + money(dep) + ' e paga um novo sinal no novo horário.', 'Sim, remarcar e pagar novo sinal', true));
       else parts.push(h('div', { class: 'btns' },

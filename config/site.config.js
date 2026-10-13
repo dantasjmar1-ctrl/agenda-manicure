@@ -59,7 +59,6 @@ window.SITE = {
 
   // Preencher depois que o banco existir
   supabase: { url: 'https://qpoutnrzzthokiqyozgs.supabase.co', anonKey: 'sb_publishable_YuGh4kEPxX0ZWa4aafq6jA_gu-WNjm7' },
-  // 'mercadopago' (automático) ou 'manual' (a dona confere o Pix). Ainda em aberto.
-  // 'teste' = botão de teste, sem dinheiro (só para desenvolver). Trocar antes de a Kailane usar.
- pagamento: { provedor: 'mercadopago', chavePix: '' }
+  // 'mercadopago' = Pix automático | 'manual' = a dona confere o Pix | 'teste' = botão de teste, sem dinheiro (só para desenvolver)
+  pagamento: { provedor: 'mercadopago', chavePix: '' }
 };

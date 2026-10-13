@@ -97,7 +97,7 @@
     if (S.resched) return null;
     if (dep === 0 && S.main) return 'Este serviço não precisa de sinal: o horário fica confirmado assim que você enviar.';
     return h('span', {}, h('b', {}, 'Para confirmar seu horário, precisamos do sinal de ' + pct() + '% por Pix' + (S.main ? ' (' + money(dep) + ')' : '') + '.'),
-      ' O horário só fica garantido depois do pagamento. Remarcando até ' + hs + ' horas antes, o sinal passa para o novo horário. Cancelando até ' + hs + ' horas antes, o sinal é devolvido por Pix. Com menos de ' + hs + ' horas, o sinal é perdido e, para remarcar, você paga um novo.');
+      ' O horário só fica garantido depois do pagamento. Remarcando até ' + hs + ' horas antes, o sinal passa para o novo horário. Cancelando até ' + hs + ' horas antes, o sinal é devolvido por Pix, em até 24 horas. Com menos de ' + hs + ' horas, o sinal é perdido e, para remarcar, você paga um novo.');
   }
   function summary() {
     const first = chosen()[0];
@@ -162,6 +162,7 @@
   /* ---------- pagamento ---------- */
   function stopTimers() { clearInterval(S.poll); clearInterval(S.clock); }
   function payStep(info) {
+    try { localStorage.setItem('pagando', info.token); } catch (e) { /* sem armazenamento */ }
     stopTimers(); setProg(4); $('form').hidden = true; $('reschedBanner').hidden = true;
     const b = $('doneBox'); b.hidden = false;
     const clock = h('b', { class: 'clock' }, '--:--');
@@ -171,7 +172,7 @@
       clock.textContent = String(Math.floor(left / 60)).padStart(2, '0') + ':' + String(left % 60).padStart(2, '0');
       if (left <= 0) { stopTimers(); expired(); }
     };
-    const expired = () => { b.hidden = true; $('form').hidden = false; S.slot = null; loadSlots().then(() => { renderDays(); renderNext(); goStep(2, true); showErr('O tempo do pagamento acabou e o horário voltou a ficar livre. Escolha de novo.'); }); };
+    const expired = () => { b.hidden = true; $('form').hidden = false; S.slot = null; loadSlots().then(() => { renderDays(); renderNext(); goStep(S.main ? 2 : 1, true); showErr('O tempo do pagamento acabou e o horário voltou a ficar livre. Escolha de novo.'); }); };
     b.replaceChildren(h('div', { class: 'pay' },
       h('h3', {}, 'Pague o sinal para garantir seu horário'),
       h('p', { class: 'hint' }, when(info.when) + ' · ' + info.services.join(' + ')),
@@ -181,7 +182,7 @@
       h('div', { class: 'rules' }, h('b', {}, 'Antes de pagar'),
         h('ul', {}, h('li', {}, 'O sinal garante o seu horário e é descontado do valor total.'),
           h('li', {}, 'Remarcando até ' + hs + ' horas antes, o sinal passa para o novo horário.'),
-          h('li', {}, 'Cancelando até ' + hs + ' horas antes, o sinal é devolvido por Pix.'),
+          h('li', {}, 'Cancelando até ' + hs + ' horas antes, o sinal é devolvido por Pix, em até 24 horas.'),
           h('li', {}, 'Com menos de ' + hs + ' horas, remarcar ou cancelar faz você perder o sinal. Para remarcar, você paga um novo.'))),
       h('div', { class: 'actions' }, h('button', { class: 'btn ghost', type: 'button', onclick: async () => {
         stopTimers(); await sb.rpc('cancel_booking', { p_token: info.token }); expired(); showErr('');
@@ -195,6 +196,7 @@
     b.scrollIntoView({ block: 'start' });
   }
   function done(info) {
+    try { localStorage.removeItem('pagando'); } catch (e) { /* sem armazenamento */ }
     stopTimers(); setProg(5); $('form').hidden = true; $('reschedBanner').hidden = true;
     const b = $('doneBox'); b.hidden = false;
     const ico = h('div', { class: 'ico' }); ico.innerHTML = '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
@@ -205,7 +207,7 @@
       h('p', {}, when(info.when) + (Number(info.deposit) ? '. Sinal de ' + money(info.deposit) + ' pago' : '') + '. O horário já está na agenda.'),
       h('div', { class: 'plink' }, h('small', {}, 'Seu link para ver, remarcar ou cancelar'), h('a', { href: link, class: 'plink-url' }, link),
         h('button', { class: 'btn small ghost', type: 'button', onclick: async (ev) => { const ok = await A.copy(link); ev.target.textContent = ok ? 'Link copiado!' : 'Toque no link acima e copie'; } }, 'Copiar link')),
-      h('p', { class: 'hint' }, 'Salve este link ou tire um print. Remarcando até ' + hs + ' horas antes, o sinal passa para o novo horário. Cancelando até ' + hs + ' horas antes, o sinal é devolvido por Pix. Com menos de ' + hs + ' horas, o sinal é perdido e você paga outro para remarcar.'),
+      h('p', { class: 'hint' }, 'Salve este link ou tire um print. Remarcando até ' + hs + ' horas antes, o sinal passa para o novo horário. Cancelando até ' + hs + ' horas antes, o sinal é devolvido por Pix, em até 24 horas. Com menos de ' + hs + ' horas, o sinal é perdido e você paga outro para remarcar.'),
       h('div', { class: 'actions' }, h('a', { class: 'btn', href: 'meu.html?t=' + info.token }, 'Ver meu agendamento'),
         h('a', { class: 'btn ghost', href: A.waLink('Oi! Sou ' + first(info.nome) + ' e agendei para ' + when(info.when) + '. Meu link para acompanhar: ' + link), target: '_blank', rel: 'noopener' }, 'Avisar no WhatsApp'),
         h('button', { class: 'btn ghost', type: 'button', onclick: () => location.reload() }, 'Fazer outro agendamento'))));
@@ -228,6 +230,21 @@
     renderOpts(); goStep(2, true);
     document.querySelectorAll('#mainList input, #extraList input').forEach((i) => { i.disabled = true; });
     $('agendar').scrollIntoView();
+  }
+
+  // Quem recarrega ou fecha a página no meio do Pix volta para a mesma tela (ou para a confirmação, se já pagou)
+  async function resume() {
+    let tok = null; try { tok = localStorage.getItem('pagando'); } catch (e) { return; }
+    if (!tok) return;
+    const clear = () => { try { localStorage.removeItem('pagando'); } catch (e) { /* sem armazenamento */ } };
+    const { data } = await sb.rpc('get_booking', { p_token: tok });
+    const b = data && data[0];
+    if (!b) return clear();
+    const nm = (i) => (svc(i) && svc(i).name) || i;
+    const info = { token: tok, total: b.total, deposit: b.deposit, hold: b.hold_until, when: b.starts_at, services: b.service_ids.map(nm), nome: b.client_name };
+    if (b.status === 'confirmed') return done(info);
+    if (b.status === 'pending' && b.hold_until && new Date(b.hold_until) > Date.now()) return payStep(info);
+    clear();
   }
 
   async function loadSlots() {
@@ -254,7 +271,7 @@
     $('stepBack').addEventListener('click', () => goStep(Math.max(1, S.step - 1)));
     goStep(1, true);
     const rem = new URLSearchParams(location.search).get('remarcar');
-    if (rem) await startResched(rem);
+    if (rem) await startResched(rem); else await resume();
   }
   init();
 })();
