@@ -1,7 +1,7 @@
 (function () {
   const A = window.App;
   const { CFG, sb, $, h, money, digits, first, when, timeOf, dayKey, friendly } = A;
-  const S = { services: [], settings: null, slots: [], main: null, extra: new Set(), day: null, slot: null, step: 1, resched: null, poll: null, clock: null };
+  const S = { services: [], settings: null, slots: [], main: null, extra: new Set(), day: null, slot: null, step: 1, resched: null, poll: null, clock: null, ready: false };
 
   const svc = (id) => S.services.find((x) => x.id === id);
   const mains = () => S.services.filter((x) => x.kind === 'principal');
@@ -109,6 +109,7 @@
     const dep = deposit();
     $('send').textContent = !S.main ? 'Confirmar meu horário' : (dep ? 'Confirmar meu horário · Pix de ' + money(dep) : 'Confirmar meu horário');
     if (S.resched) $('send').textContent = 'Confirmar novo horário';
+    saveDraft();
   }
   const showErr = (m) => { const e = $('err'); e.textContent = m || ''; e.hidden = !m; };
 
@@ -152,6 +153,34 @@
   }
   const fmtPhone = (d) => '(' + d.slice(0, 2) + ') ' + d.slice(2, 7) + '-' + d.slice(7);
 
+  /* ---------- rascunho: recarregar a página não perde o que já foi escolhido ---------- */
+  const DK = 'rascunho';
+  function saveDraft() {
+    if (!S.ready || S.resched) return;
+    try {
+      localStorage.setItem(DK, JSON.stringify({ t: Date.now(), step: S.step, main: S.main, extra: [...S.extra], day: S.day, slot: S.slot && S.slot.id,
+        nome: $('nome').value, zap: $('zap').value, obs: $('obs').value }));
+    } catch (e) { /* sem armazenamento: tudo bem */ }
+  }
+  const clearDraft = () => { try { localStorage.removeItem(DK); } catch (e) { /* sem armazenamento */ } };
+  function readDraft() {
+    try { const d = JSON.parse(localStorage.getItem(DK) || 'null'); return d && Date.now() - d.t < 6 * 3600e3 ? d : null; } catch (e) { return null; }
+  }
+  function restoreDraft(d) {
+    if (!d) return;
+    if (d.main && S.services.some((x) => x.id === d.main)) S.main = d.main;
+    (d.extra || []).forEach((i) => { if (S.services.some((x) => x.id === i)) S.extra.add(i); });
+    const sl = d.slot && S.slots.find((x) => x.id === d.slot);
+    if (sl) { S.slot = sl; S.day = dayKey(sl.starts_at); } else if (d.day && S.slots.some((x) => dayKey(x.starts_at) === d.day)) S.day = d.day;
+    $('nome').value = d.nome || ''; $('zap').value = d.zap || ''; $('obs').value = d.obs || '';
+    renderOpts(); renderDays();
+    let st = Math.min(3, Math.max(1, d.step || 1));
+    if (st >= 2 && !S.main) st = 1;
+    if (st === 3 && !S.slot) st = 2;
+    goStep(st, true);
+    if (d.slot && !sl && st >= 2) showErr('O horário que você tinha escolhido não está mais livre. Escolha outro.');
+  }
+
   /* ---------- envio ---------- */
   async function submit(ev) {
     ev.preventDefault(); showErr('');
@@ -179,7 +208,7 @@
       const { data, error } = await sb.rpc('create_booking', { p_slot: S.slot.id, p_name: nome, p_phone: zap, p_services: ids, p_note: $('obs').value.trim() || null });
       if (error) throw error;
       const r = data[0];
-      sessionStorageSafe(r.token);
+      sessionStorageSafe(r.token); clearDraft();
       const info = { token: r.token, total: r.total, deposit: r.deposit, hold: r.hold_until, when: S.slot.starts_at, services: chosen().map((x) => x.name), nome };
       if (Number(r.deposit) === 0) return done(info);
       payStep(info);
@@ -285,6 +314,7 @@
   }
 
   async function init() {
+    const draft = readDraft();
     A.loadCachedContent(); A.applyTheme(); renderStatic();            // aparece na hora, com o que já foi visto
     const pContent = A.loadContent();                                  // tudo abaixo busca ao mesmo tempo
     const pData = Promise.all([A.loadServices(), A.loadSettings()]);
@@ -308,9 +338,11 @@
     });
     $('stepNext').addEventListener('click', nextStep);
     $('stepBack').addEventListener('click', () => goStep(Math.max(1, S.step - 1)));
+    ['nome', 'zap', 'obs'].forEach((id) => $(id).addEventListener('input', saveDraft));
     goStep(1, true);
     const rem = new URLSearchParams(location.search).get('remarcar');
-    if (rem) await startResched(rem); else await resume();
+    if (rem) await startResched(rem); else { await resume(); if (!$('form').hidden) restoreDraft(draft); }
+    S.ready = true; saveDraft();
   }
   init();
 })();
