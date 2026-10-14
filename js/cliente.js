@@ -128,14 +128,45 @@
     goStep(S.step + 1);
   }
 
+  /* ---------- validação de nome e WhatsApp ---------- */
+  const DDDS = new Set('11 12 13 14 15 16 17 18 19 21 22 24 27 28 31 32 33 34 35 37 38 41 42 43 44 45 46 47 48 49 51 53 54 55 61 62 63 64 65 66 67 68 69 71 73 74 75 77 79 81 82 83 84 85 86 87 88 89 91 92 93 94 95 96 97 98 99'.split(' '));
+  function fixName(v) {
+    return v.replace(/\s+/g, ' ').trim().toLocaleLowerCase('pt-BR').replace(/(^|[\s'-])(\p{L})/gu, (m, a, b) => a + b.toLocaleUpperCase('pt-BR'))
+      .replace(/ (Da|De|Do|Das|Dos|E) /g, (m) => m.toLowerCase());
+  }
+  function nameError(n) {
+    if (!/^[\p{L}][\p{L} '-]*$/u.test(n)) return 'Use só letras no nome (sem números ou símbolos).';
+    const letters = n.replace(/[^\p{L}]/gu, '');
+    const f = n.split(' ')[0].replace(/[^\p{L}]/gu, '');
+    if (letters.length < 3 || f.length < 2) return 'Informe seu nome.';
+    if (/(\p{L})\1{2,}/u.test(letters.toLowerCase())) return 'Confira seu nome, ele parece ter letras repetidas.';
+    if (!/[aeiouyáàâãéêíóôõúü]/i.test(letters)) return 'Confira seu nome, parece ter algum erro de digitação.';
+    if (n.length > 60) return 'Nome muito longo.';
+    return '';
+  }
+  function normPhone(v) {
+    let d = digits(v);
+    if (d.length >= 12 && d.startsWith('55')) d = d.slice(2);
+    if (d.length === 11 && d[2] === '9' && DDDS.has(d.slice(0, 2)) && !/^(\d)\1+$/.test(d.slice(2))) return d;
+    return '';
+  }
+  const fmtPhone = (d) => '(' + d.slice(0, 2) + ') ' + d.slice(2, 7) + '-' + d.slice(7);
+
   /* ---------- envio ---------- */
   async function submit(ev) {
     ev.preventDefault(); showErr('');
-    const nome = $('nome').value.trim(), zap = $('zap').value.trim();
+    const nome = fixName($('nome').value);
     if (!S.main) return showErr('Escolha o serviço.');
     if (!S.slot) return showErr('Escolha um dia e um horário.');
-    if (nome.length < 2) return showErr('Informe seu nome.');
-    if (digits(zap).length < 10) return showErr('Informe um WhatsApp com DDD.');
+    const nErr = S.resched ? '' : nameError(nome);
+    if (nErr) return showErr(nErr);
+    $('nome').value = nome;
+    let zap = '';
+    if (!S.resched) {
+      const d = normPhone($('zap').value);
+      if (!d) return showErr('Informe um WhatsApp válido com DDD, por exemplo (11) 91234-5678.');
+      zap = fmtPhone(d); $('zap').value = zap;
+    }
     $('send').disabled = true;
     try {
       if (S.resched) {
@@ -267,6 +298,14 @@
     try { await pSlots; } catch (e) { falhou(); return; }
     renderCatalog(); renderOpts(); renderDays(); renderNext();
     $('form').addEventListener('submit', submit);
+    $('nome').addEventListener('input', (e) => { e.target.value = e.target.value.replace(/[^\p{L} '-]/gu, '').replace(/ {2,}/g, ' '); });
+    $('zap').addEventListener('input', (e) => {
+      if (e.target.disabled) return;
+      let d = digits(e.target.value);
+      if (d.length > 11 && d.startsWith('55')) d = d.slice(2);
+      d = d.slice(0, 11);
+      e.target.value = d.length <= 2 ? d : d.length <= 7 ? '(' + d.slice(0, 2) + ') ' + d.slice(2) : '(' + d.slice(0, 2) + ') ' + d.slice(2, 7) + '-' + d.slice(7);
+    });
     $('stepNext').addEventListener('click', nextStep);
     $('stepBack').addEventListener('click', () => goStep(Math.max(1, S.step - 1)));
     goStep(1, true);

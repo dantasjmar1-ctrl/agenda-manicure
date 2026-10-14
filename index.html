@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light">
 <title>Agendamento</title>
+<link rel="preconnect" href="https://qpoutnrzzthokiqyozgs.supabase.co" crossorigin>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600&family=Playfair+Display:wght@400;500;600&display=swap">
@@ -12,7 +13,7 @@
 </head>
 <body>
 <header class="top"><div class="wrap">
-  <a href="#topo" aria-label="Início"><img src="config/logo.png" data-img="logo" alt="Logo"></a>
+  <a href="#topo" aria-label="Início"><img src="config/logo.png" data-img="logo" fetchpriority="high" alt="Logo"></a>
   <nav aria-label="Seções"><a href="#servicos">Serviços</a><a href="#studio">Studio</a><a class="cta" href="#agendar">Agendar</a></nav>
 </div></header>
 <main class="wrap" id="topo">
@@ -47,8 +48,8 @@
       </div>
       <div class="step" data-step="3"><h3>Seus dados</h3>
         <div class="fields">
-          <div class="f"><label for="nome">Nome</label><input id="nome" autocomplete="name" placeholder="Como posso te chamar?"></div>
-          <div class="f"><label for="zap">WhatsApp</label><input id="zap" type="tel" inputmode="tel" autocomplete="tel" placeholder="(11) 90000-0000"></div>
+          <div class="f"><label for="nome">Nome</label><input id="nome" autocomplete="name" maxlength="60" placeholder="Como posso te chamar?"></div>
+          <div class="f"><label for="zap">WhatsApp</label><input id="zap" type="tel" inputmode="numeric" autocomplete="tel" maxlength="15" placeholder="(11) 90000-0000"></div>
           <div class="f full"><label for="obs">Observação (opcional)</label><textarea id="obs" placeholder="Formato, cor, alguma alergia ou aviso para a profissional..."></textarea></div>
         </div>
       </div>
@@ -63,11 +64,11 @@
 
   <section id="studio">
     <div class="about">
-      <img src="config/about.jpg" data-img="about" alt="No studio">
+      <img src="config/about.jpg" data-img="about" loading="lazy" decoding="async" alt="No studio">
       <div class="tx"><span class="eyebrow">Sobre mim</span><h2 id="sobreTitulo"></h2>
         <div class="facts" id="sobreFatos"></div><div id="sobreTxt"></div></div>
     </div>
-    <div class="gal"><img src="config/studio.jpg" data-img="studio" alt="O studio"><img src="config/nails1.jpg" data-img="nails1" alt="Unhas"><img src="config/hands.jpg" data-img="hands" alt="No atendimento"></div>
+    <div class="gal"><img src="config/studio.jpg" data-img="studio" loading="lazy" decoding="async" alt="O studio"><img src="config/nails1.jpg" data-img="nails1" loading="lazy" decoding="async" alt="Unhas"><img src="config/hands.jpg" data-img="hands" loading="lazy" decoding="async" alt="No atendimento"></div>
   </section>
 
   <footer>
