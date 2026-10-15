@@ -52,7 +52,8 @@ create table owner (owner_email text primary key);   -- preencher com o e-mail d
 -- ---------- Funções auxiliares ----------
 create or replace function is_owner() returns boolean
 language sql stable security definer as $$
-  select auth.uid() is not null and auth.jwt() ->> 'email' = (select owner_email from owner limit 1);
+  select auth.uid() is not null
+     and exists (select 1 from owner where lower(owner_email) = lower(auth.jwt() ->> 'email'));
 $$;
 
 -- ---------- RLS ----------

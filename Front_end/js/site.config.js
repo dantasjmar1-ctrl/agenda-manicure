@@ -1,9 +1,9 @@
 // Tudo que muda de uma manicure para outra fica neste arquivo.
-// Para alugar o site: copie o projeto, troque este arquivo e as imagens desta pasta.
+// Para alugar o site: copie o projeto, troque este arquivo e as imagens da pasta Imagens.
 window.SITE = {
   nome: 'Kailane Bonfim',
   subtitulo: 'Nail Designer',
-  logo: 'config/logo.png',
+  logo: 'Imagens/logo.png',
   whatsapp: '5511940587377',  // só números, com DDI
   instagram: 'kailane.design',  // sem @
   endereco: '',

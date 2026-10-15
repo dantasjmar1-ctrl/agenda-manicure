@@ -5,25 +5,24 @@ Um modelo único, usado por várias manicures. Cada uma tem a própria cópia, b
 
 ## Estrutura
 ```
-index.html, meu.html, painel.html   páginas: cliente, link pessoal, painel da dona
-css/, js/                           visual e lógica
-config/                             configuração e imagens de cada manicure (é o que muda entre clientes)
-supabase/                           banco: schema.sql, seed.sql, 002 a 007 (funções, conteúdo, manutenção e clientes, dias fechados, horários automáticos, Pix automático)
-supabase/functions/                funções do servidor (Pix do Mercado Pago)
-docs/                               documentação do projeto
+Front_end/                     é a única pasta que vai para o Cloudflare Pages
+  index.html, meu.html, painel.html   páginas: cliente, link pessoal, painel da dona
+  css/, js/                    visual e lógica
+  js/site.config.js            configuração de cada manicure (é o que muda entre clientes)
+  Imagens/                     fotos e logo de cada manicure
+Banco-de-dados/                SQL para rodar no SQL Editor do Supabase
+Back-end/supabase/functions/   funções do servidor (Pix do Mercado Pago), coladas no Supabase
+docs/                          documentação do projeto
 ```
 
 ## Ordem para montar um site novo
-1. Criar projeto no Supabase e rodar `schema.sql`, `seed.sql`, `002_funcoes_site.sql`, `003_conteudo_site.sql`, `004_manutencao_e_clientes.sql`, `005_dias_fechados.sql` `006_horarios_automaticos.sql` e `007_mercadopago.sql` (nessa ordem). Depois, seguir `docs/mercadopago.md`.
-2. `insert into owner values ('email-da-dona')` e criar o mesmo e-mail em Authentication > Users.
-3. Preencher `config/site.config.js` (nome, cores, serviços, URL e chave pública do Supabase).
-4. Publicar na Vercel.
-5. Antes de usar de verdade: trocar `pagamento.provedor` e apagar `dev_confirm_payment` (ver `dev_pagamento_teste.sql`).
+1. Criar projeto no Supabase e rodar, em Banco-de-dados, nesta ordem: `schema.sql`, `seed.sql`, `002`, `003`, `004`, `005`, `006` e `007_mercadopago.sql`. Depois, seguir `docs/mercadopago.md`.
+2. Criar o login da dona em Authentication > Users (Auto Confirm User) e rodar `insert into owner values ('email-em-minusculas');`.
+3. Preencher `Front_end/js/site.config.js` (nome, cores, serviços, URL e chave pública do Supabase) e trocar as fotos em `Front_end/Imagens/`.
+4. Publicar no Cloudflare Pages arrastando só a pasta `Front_end`.
+5. Antes de usar de verdade: `pagamento.provedor` em `mercadopago` e apagar `dev_confirm_payment` (ver `dev_pagamento_teste.sql`).
 
 ## Regras do projeto
-- Nada de nome de cliente no código. Tudo que é de uma manicure fica em `config/`.
-- Senhas e chaves secretas nunca entram no GitHub (usar variáveis de ambiente). Só a URL e a chave pública do Supabase podem ficar em `config/`.
-- Commits pequenos, com mensagem clara (ex.: `Adiciona tela de agendamento`).
-
-## Status
-Telas e banco prontos (testados com banco simulado). Falta: teste no Supabase real, Pix de verdade e publicação.
+- Nada de nome de cliente no código. Tudo que é de uma manicure fica em `site.config.js` e `Imagens/`.
+- Senhas e chaves secretas nunca entram no GitHub. Só a URL e a chave pública do Supabase podem ficar em `site.config.js`.
+- Commits pequenos, com mensagem clara.

@@ -60,7 +60,7 @@
       start();
     };
     $('box').replaceChildren(h('div', { class: 'login' },
-      h('img', { 'data-img': 'logo', alt: 'Logo', src: 'config/logo.png' }), h('h2', {}, 'Painel'),
+      h('img', { 'data-img': 'logo', alt: 'Logo', src: 'Imagens/logo.png' }), h('h2', {}, 'Painel'),
       h('p', { class: 'hint' }, 'Acesso só para a dona do studio.'),
       h('form', { novalidate: true, onsubmit: go },
         h('div', { class: 'f' }, h('label', { for: 'pEmail' }, 'E-mail'), em),

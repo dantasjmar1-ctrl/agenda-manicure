@@ -1,4 +1,4 @@
-/* Pagamento do sinal. O provedor é escolhido em config/site.config.js (pagamento.provedor):
+/* Pagamento do sinal. O provedor é escolhido em js/site.config.js (pagamento.provedor):
    'teste'       botão de teste, sem dinheiro de verdade (só durante o desenvolvimento)
    'manual'      mostra a chave Pix e a dona confirma no painel
    'mercadopago' Pix automático: QR Code e copia-e-cola, confirmação sozinha */

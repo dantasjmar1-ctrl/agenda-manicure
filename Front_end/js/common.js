@@ -1,4 +1,4 @@
-/* Código comum às páginas. Tudo que é de uma manicure vem de config/site.config.js */
+/* Código comum às páginas. Tudo que é de uma manicure vem de js/site.config.js */
 (function () {
   const CFG = window.SITE;
   const TZ = 'America/Sao_Paulo';
@@ -31,7 +31,7 @@
   const rules = () => CFG.regras;
   const depositPct = (svc, def) => (svc.deposit_pct == null ? def : Number(svc.deposit_pct));
 
-  // Conteúdo editável pela dona (tabela site_content). Se falhar, o site usa o que está em config/.
+  // Conteúdo editável pela dona (tabela site_content). Se falhar, o site usa o que está em site.config.js e Imagens/.
   CFG.fotos = {};
   // Aplica o conteúdo editável (textos, contatos, fotos) em CFG
   function applyContent(d) {
@@ -56,7 +56,7 @@
     } catch (e) { return {}; }
   }
   const digitsOnly = (s) => String(s || '').replace(/\D/g, '');
-  const img = (key) => CFG.fotos[key] || ('config/' + key + (key === 'logo' ? '.png' : '.jpg'));
+  const img = (key) => CFG.fotos[key] || ('Imagens/' + key + (key === 'logo' ? '.png' : '.jpg'));
 
   function applyTheme() {
     const c = CFG.cores, r = document.documentElement.style;
