@@ -52,6 +52,18 @@
     const em = h('input', { id: 'pEmail', type: 'email', autocomplete: 'username', placeholder: 'seu e-mail' });
     const pw = h('input', { id: 'pPass', type: 'password', autocomplete: 'current-password', placeholder: 'sua senha' });
     const er = h('p', { class: 'err', role: 'alert', hidden: !msg }, msg || '');
+    const ICON = {
+      show: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
+      hide: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path d="M3 3l18 18"/></svg>'
+    };
+    const eye = h('button', { type: 'button', class: 'eye', 'aria-label': 'Mostrar senha', 'aria-pressed': 'false', onclick: () => {
+      const show = pw.type === 'password';
+      pw.type = show ? 'text' : 'password';
+      eye.innerHTML = show ? ICON.hide : ICON.show;
+      eye.setAttribute('aria-label', show ? 'Ocultar senha' : 'Mostrar senha');
+      eye.setAttribute('aria-pressed', String(show));
+    } });
+    eye.innerHTML = ICON.show;
     const go = async (ev) => {
       ev.preventDefault();
       if (!em.value.trim() || !pw.value) { er.hidden = false; er.textContent = 'Informe e-mail e senha.'; return; }
@@ -64,8 +76,42 @@
       h('p', { class: 'hint' }, 'Acesso só para a dona do studio.'),
       h('form', { novalidate: true, onsubmit: go },
         h('div', { class: 'f' }, h('label', { for: 'pEmail' }, 'E-mail'), em),
-        h('div', { class: 'f' }, h('label', { for: 'pPass' }, 'Senha'), pw), er,
-        h('button', { class: 'btn', type: 'submit' }, 'Entrar'))));
+        h('div', { class: 'f' }, h('label', { for: 'pPass' }, 'Senha'),
+          h('div', { class: 'pwrap' }, pw, eye)), er,
+        h('button', { class: 'btn', type: 'submit' }, 'Entrar'),
+        h('button', { class: 'linkbtn', type: 'button', onclick: forgot }, 'Esqueci minha senha'))));
+  }
+
+  async function forgot() {
+    const em = $('pEmail'), er = document.querySelector('.login .err');
+    const say = (t) => { er.hidden = false; er.textContent = t; };
+    if (!em.value.trim()) { say('Digite seu e-mail acima e toque de novo em "Esqueci minha senha".'); return; }
+    const { error } = await sb.auth.resetPasswordForEmail(em.value.trim().toLowerCase(), { redirectTo: location.origin + location.pathname });
+    if (error) { say('Não foi possível enviar agora. Tente de novo em alguns minutos.'); return; }
+    say('Se esse e-mail tiver acesso, enviamos um link para criar uma nova senha. Olhe também o spam.');
+  }
+
+  function renderNewPass() {
+    const a = h('input', { id: 'nPass', type: 'password', autocomplete: 'new-password', placeholder: 'nova senha (mínimo 8 caracteres)' });
+    const b = h('input', { id: 'nPass2', type: 'password', autocomplete: 'new-password', placeholder: 'repita a nova senha' });
+    const er = h('p', { class: 'err', role: 'alert', hidden: true });
+    const go = async (ev) => {
+      ev.preventDefault();
+      er.hidden = false;
+      if (a.value.length < 8) { er.textContent = 'Use pelo menos 8 caracteres.'; return; }
+      if (a.value !== b.value) { er.textContent = 'As senhas não são iguais.'; return; }
+      const { error } = await sb.auth.updateUser({ password: a.value });
+      if (error) { er.textContent = 'Não foi possível trocar a senha. Peça um novo link.'; return; }
+      S.recovering = false;
+      history.replaceState(null, '', location.pathname);
+      start();
+    };
+    $('box').replaceChildren(h('div', { class: 'login' }, h('h2', {}, 'Nova senha'),
+      h('p', { class: 'hint' }, 'Crie a nova senha de acesso ao painel.'),
+      h('form', { novalidate: true, onsubmit: go },
+        h('div', { class: 'f' }, h('label', { for: 'nPass' }, 'Nova senha'), a),
+        h('div', { class: 'f' }, h('label', { for: 'nPass2' }, 'Repita a senha'), b), er,
+        h('button', { class: 'btn', type: 'submit' }, 'Salvar nova senha'))));
   }
 
   /* ---------- telas ---------- */
@@ -346,6 +392,7 @@
   }
 
   async function start() {
+    if (S.recovering) return renderNewPass();
     const { data } = await sb.auth.getSession();
     if (!data.session) return renderLogin();
     S.user = data.session.user;
@@ -353,5 +400,7 @@
     if (owner.error || owner.data !== true) { await sb.auth.signOut(); return renderLogin('Este e-mail não tem acesso ao painel.'); }
     await reload();
   }
+  S.recovering = /type=recovery/.test(location.hash);
+  sb.auth.onAuthStateChange((ev) => { if (ev === 'PASSWORD_RECOVERY') { S.recovering = true; renderNewPass(); } });
   (async () => { await A.loadContent(); A.applyTheme(); start(); })();
 })();
