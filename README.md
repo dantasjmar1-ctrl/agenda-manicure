@@ -105,23 +105,14 @@ O sistema foi desenvolvido para atender à manicure Kailane Bonfim, mas sua estr
 
 ## 📁 Estrutura do projeto
 
-As imagens das telas estão organizadas na pasta `Imagens`.
-
 ```text
 SistemaDeAgendamento
+├── Backend
+├── Frontend
+├── BancoDeDados
 ├── Imagens
-│   ├── Adicionais.png
-│   ├── Agenda.png
-│   ├── Serviços 1.png
-│   ├── Serviços 2.png
-│   ├── Sobre mim.png
-│   └── Tela Inicial.png
 └── README.md
 ```
-
-*Estrutura ilustrativa das imagens e do README. Os demais diretórios e arquivos podem ser acrescentados conforme a organização real do repositório.*
-
----
 
 ## Telas do Sistema
 
