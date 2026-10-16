@@ -23,13 +23,9 @@ A profissional conta com um painel administrativo para visualizar e gerenciar a 
 
 O sistema foi desenvolvido para atender à manicure Kailane Bonfim, mas sua estrutura foi planejada para possibilitar a adaptação a outras profissionais da área.
 
-## Status do projeto
+## Acesse o Sistema
 
-- **Status:** projeto acadêmico concluído.
-- **Plataforma:** sistema web responsivo.
-- **Pagamento:** integração com Mercado Pago para pagamento de sinal por Pix.
-
----
+**Sistema de Agendamento:** [agenda-manicures.pages.dev](https://agenda-manicures.pages.dev/)
 
 ## Funcionalidades
 
